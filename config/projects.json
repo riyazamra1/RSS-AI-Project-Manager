@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "projects": [
+    {"id":"rss-cloud-sync","name":"RSS CLOUD SYNC","repository":"riyazamra1/RSS-Cloud-Sync","enabled":true,"priority":1},
+    {"id":"rss-money-manager","name":"RSS MONEY MANAGER","repository":"riyazamra1/RSS-Money-Manager","enabled":true,"priority":2},
+    {"id":"rss-password-manager","name":"RSS PASSWORD MANAGER","repository":"riyazamra1/RSS-Password-Manager","enabled":true,"priority":3},
+    {"id":"rss-ai-assistant","name":"RSS AI ASSISTANT","repository":"riyazamra1/RSS-Ai-Assistant","enabled":true,"priority":4},
+    {"id":"rss-clipboard","name":"RSS CLIPBOARD","repository":"riyazamra1/RSS-Clipboard","enabled":true,"priority":5},
+    {"id":"rss-launcher","name":"RSS LAUNCHER","repository":"riyazamra1/RSS-Launcher","enabled":true,"priority":6},
+    {"id":"rss-rdp-cloud-pc","name":"RSS RDP CLOUD PC","repository":"riyazamra1/RSS-RDP-Cloud-PC","enabled":true,"priority":7},
+    {"id":"rss-device-guardian","name":"RSS DEVICE GUARDIAN","repository":"riyazamra1/RSS-Device-Guardian","enabled":true,"priority":8},
+    {"id":"rss-caller-id","name":"RSS CALLER ID","repository":"riyazamra1/RSS-Caller-ID","enabled":true,"priority":9},
+    {"id":"rss-whatsapp-automation","name":"RSS WHATSAPP AUTOMATION","repository":"riyazamra1/RSS-Whatsapp-Automation","enabled":true,"priority":10},
+    {"id":"rss-mobile-reload-system","name":"RSS MOBILE RELOAD SYSTEM","repository":"riyazamra1/RSS-Mobile-Reload-System","enabled":true,"priority":11},
+    {"id":"razeen-secure-solution-website","name":"RAZEEN SECURE SOLUTION WEBSITE","repository":"riyazamra1/Razeen-Secure-Solution-Website","enabled":true,"priority":12}
+  ]
+}
