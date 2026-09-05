@@ -1,0 +1,54 @@
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
+from ..db import get_connection
+
+router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+class ProjectCreate(BaseModel):
+    id: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=200)
+    repository: str | None = None
+    enabled: bool = True
+    priority: int = 100
+
+
+@router.get("")
+def list_projects() -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, name, repository, enabled, priority, created_at, updated_at "
+            "FROM projects ORDER BY priority, name"
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@router.get("/{project_id}")
+def get_project(project_id: str) -> dict:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT id, name, repository, enabled, priority, created_at, updated_at "
+            "FROM projects WHERE id = %s",
+            (project_id,),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return dict(row)
+
+
+@router.post("", status_code=201)
+def create_project(project: ProjectCreate) -> dict:
+    with get_connection() as conn:
+        try:
+            row = conn.execute(
+                "INSERT INTO projects (id, name, repository, enabled, priority) "
+                "VALUES (%s, %s, %s, %s, %s) "
+                "RETURNING id, name, repository, enabled, priority, created_at, updated_at",
+                (project.id, project.name, project.repository, project.enabled, project.priority),
+            ).fetchone()
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            raise HTTPException(status_code=409, detail="Project ID already exists") from exc
+    return dict(row)
