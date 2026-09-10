@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-import os
-
-import urllib.error
-import urllib.request
 import json
+import os
+import urllib.request
+
+from .codex_provider import CodexProvider
 
 
 @dataclass(frozen=True)
@@ -14,26 +14,29 @@ class AIResponse:
 
 
 class AIProviderRouter:
-    """Provider-independent router with Ollama-first local execution and hosted fallbacks."""
+    """Provider-independent failover: Codex/OpenAI, Ollama, then Gemini."""
 
     def __init__(self) -> None:
         self.ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2")
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        self.codex = CodexProvider()
 
     def generate(self, prompt: str) -> AIResponse:
         errors: list[str] = []
-        try:
-            return self._ollama(prompt)
-        except Exception as exc:
-            errors.append(f"ollama: {exc}")
+        providers = []
+        if self.codex.available():
+            providers.append(("codex", self.codex.generate))
+        providers.extend((("ollama", self._ollama), ("gemini", self._gemini)))
 
-        if self.gemini_api_key:
+        for name, provider in providers:
+            if name == "gemini" and not self.gemini_api_key:
+                continue
             try:
-                return self._gemini(prompt)
+                return provider(prompt)
             except Exception as exc:
-                errors.append(f"gemini: {exc}")
+                errors.append(f"{name}: {exc}")
 
         raise RuntimeError("No AI provider available; " + "; ".join(errors))
 
