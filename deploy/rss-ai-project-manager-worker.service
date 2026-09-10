@@ -1,0 +1,15 @@
+[Unit]
+Description=RSS AI Project Manager Task Worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/rss-ai-project-manager/backend
+ExecStart=/opt/rss-ai-project-manager/.venv/bin/python -m app.worker
+Restart=always
+RestartSec=10
+Environment=WORKER_INTERVAL_SECONDS=60
+
+[Install]
+WantedBy=multi-user.target
