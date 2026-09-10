@@ -1,10 +1,14 @@
 from fastapi import FastAPI
 
+from app.api.memory import router as memory_router
+from app.api.project_discovery import router as project_discovery_router
 from app.api.projects import router as projects_router
 
-app = FastAPI(title="RSS AI Project Manager", version="0.2.2")
+app = FastAPI(title="RSS AI Project Manager", version="0.3.0")
 
 app.include_router(projects_router, prefix="/api/v1")
+app.include_router(project_discovery_router)
+app.include_router(memory_router, prefix="/api/v1")
 
 
 @app.get("/health")
