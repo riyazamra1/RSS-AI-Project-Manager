@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "projects": [
     {"id":"rss-cloud-sync","name":"RSS CLOUD SYNC","repository":"riyazamra1/RSS-Cloud-Sync","enabled":true,"priority":1},
     {"id":"rss-money-manager","name":"RSS MONEY MANAGER","repository":"riyazamra1/RSS-Money-Manager","enabled":true,"priority":2},
@@ -9,9 +9,10 @@
     {"id":"rss-launcher","name":"RSS LAUNCHER","repository":"riyazamra1/RSS-Launcher","enabled":true,"priority":6},
     {"id":"rss-rdp-cloud-pc","name":"RSS RDP CLOUD PC","repository":"riyazamra1/RSS-RDP-Cloud-PC","enabled":true,"priority":7},
     {"id":"rss-device-guardian","name":"RSS DEVICE GUARDIAN","repository":"riyazamra1/RSS-Device-Guardian","enabled":true,"priority":8},
-    {"id":"rss-caller-id","name":"RSS CALLER ID","repository":"riyazamra1/RSS-Caller-ID","enabled":true,"priority":9},
-    {"id":"rss-whatsapp-automation","name":"RSS WHATSAPP AUTOMATION","repository":"riyazamra1/RSS-Whatsapp-Automation","enabled":true,"priority":10},
-    {"id":"rss-mobile-reload-system","name":"RSS MOBILE RELOAD SYSTEM","repository":"riyazamra1/RSS-Mobile-Reload-System","enabled":true,"priority":11},
-    {"id":"razeen-secure-solution-website","name":"RAZEEN SECURE SOLUTION WEBSITE","repository":"riyazamra1/Razeen-Secure-Solution-Website","enabled":true,"priority":12}
+    {"id":"rss-autopilot","name":"RSS AUTOPILOT","repository":"riyazamra1/RSS-Autopilot","enabled":true,"priority":9,"role":"controller"},
+    {"id":"rss-caller-id","name":"RSS CALLER ID","repository":"riyazamra1/RSS-Caller-ID","enabled":true,"priority":10},
+    {"id":"rss-whatsapp-automation","name":"RSS WHATSAPP AUTOMATION","repository":"riyazamra1/RSS-Whatsapp-Automation","enabled":true,"priority":11},
+    {"id":"rss-mobile-reload-system","name":"RSS MOBILE RELOAD SYSTEM","repository":"riyazamra1/RSS-Mobile-Reload-System","enabled":true,"priority":12},
+    {"id":"razeen-secure-solution-website","name":"RAZEEN SECURE SOLUTION WEBSITE","repository":"riyazamra1/Razeen_Secure_Solution_Website","enabled":true,"priority":13}
   ]
 }
