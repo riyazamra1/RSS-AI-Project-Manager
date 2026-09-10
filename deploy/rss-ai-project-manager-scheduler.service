@@ -1,0 +1,15 @@
+[Unit]
+Description=RSS AI Project Manager GitHub Discovery Scheduler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/rss-ai-project-manager/backend
+ExecStart=/opt/rss-ai-project-manager/.venv/bin/python -m app.scheduler
+Restart=always
+RestartSec=10
+Environment=DISCOVERY_INTERVAL_SECONDS=900
+
+[Install]
+WantedBy=multi-user.target
