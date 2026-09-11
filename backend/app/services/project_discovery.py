@@ -20,19 +20,28 @@ def _github_repositories(owner: str) -> list[dict]:
     token = os.getenv("RSS_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
     headers = {
         "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2026-03-10",
         "User-Agent": "RSS-AI-Project-Manager",
     }
-
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    req = Request(
-        f"https://api.github.com/users/{owner}/repos?per_page=100&type=all",
-        headers=headers,
-    )
-
-    with urlopen(req, timeout=20) as response:
-        return json.loads(response.read().decode("utf-8"))
+    repos: list[dict] = []
+    page = 1
+    while True:
+        req = Request(
+            f"https://api.github.com/user/repos?per_page=100&page={page}&affiliation=owner,collaborator,organization_member&sort=full_name",
+            headers=headers,
+        )
+        with urlopen(req, timeout=20) as response:
+            batch = json.loads(response.read().decode("utf-8"))
+        if not isinstance(batch, list):
+            raise RuntimeError(f"GitHub repository API returned unexpected response: {batch}")
+        repos.extend(batch)
+        if len(batch) < 100:
+            break
+        page += 1
+    return [repo for repo in repos if repo.get("owner", {}).get("login", "").lower() == owner.lower()]
 
 
 def _matches(name: str, patterns: list[str]) -> bool:
@@ -46,7 +55,6 @@ def _matches(name: str, patterns: list[str]) -> bool:
 def _sync_projects(projects: list[dict]) -> int:
     """Synchronize discovered projects into PostgreSQL."""
     synced = 0
-
     with get_connection() as conn:
         for project in projects:
             conn.execute(
@@ -63,15 +71,11 @@ def _sync_projects(projects: list[dict]) -> int:
                     updated_at = NOW()
                 """,
                 (
-                    project["id"],
-                    project["name"],
-                    project["repository"],
-                    project.get("enabled", True),
-                    int(project.get("priority", 999999)),
+                    project["id"], project["name"], project["repository"],
+                    project.get("enabled", True), int(project.get("priority", 999999)),
                 ),
             )
             synced += 1
-
     return synced
 
 
@@ -82,71 +86,28 @@ def discover_projects() -> dict:
     if not discovery.get("enabled", False):
         projects = registry.get("projects", [])
         _sync_projects(projects)
-        return {
-            "discovered": len(projects),
-            "added": 0,
-            "projects": projects,
-        }
+        return {"discovered": len(projects), "added": 0, "projects": projects}
 
     owner = discovery["owner"]
-    excludes = {
-        name.lower()
-        for name in discovery.get("exclude_repositories", [])
-    }
+    excludes = {name.lower() for name in discovery.get("exclude_repositories", [])}
     patterns = discovery.get("include_patterns", [])
-
-    existing = {
-        item["repository"].lower(): item
-        for item in registry.get("projects", [])
-    }
-
-    next_priority = (
-        max(
-            (int(item.get("priority", 0)) for item in existing.values()),
-            default=0,
-        )
-        + 1
-    )
-
+    existing = {item["repository"].lower(): item for item in registry.get("projects", [])}
+    next_priority = max((int(item.get("priority", 0)) for item in existing.values()), default=0) + 1
     added = 0
 
     for repo in _github_repositories(owner):
         name = repo.get("name", "")
-
-        if not name:
+        if not name or name.lower() in excludes or not _matches(name, patterns):
             continue
-
-        if name.lower() in excludes:
-            continue
-
-        if not _matches(name, patterns):
-            continue
-
-        full_name = repo.get(
-            "full_name",
-            f"{owner}/{name}",
-        )
-
+        full_name = repo.get("full_name", f"{owner}/{name}")
         if full_name.lower() in existing:
             continue
 
-        slug = re.sub(
-            r"[^a-z0-9]+",
-            "-",
-            name.lower(),
-        ).strip("-")
-
+        slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
         category = "system"
-
-        if "game" in name.lower() or name.lower() in {
-            "rss-omi-kings",
-            "rss-flux-runner",
-        }:
+        if "game" in name.lower() or name.lower() in {"rss-omi-kings", "rss-flux-runner"}:
             category = "game"
-        elif not any(
-            token in name.lower()
-            for token in ("autopilot", "devops")
-        ):
+        elif not any(token in name.lower() for token in ("autopilot", "devops")):
             category = "product"
 
         existing[full_name.lower()] = {
@@ -158,23 +119,9 @@ def discover_projects() -> dict:
             "category": category,
             "discovered": True,
         }
-
         next_priority += 1
         added += 1
 
-    projects = sorted(
-        existing.values(),
-        key=lambda item: (
-            int(item.get("priority", 999999)),
-            item["id"],
-        ),
-    )
-
+    projects = sorted(existing.values(), key=lambda item: (int(item.get("priority", 999999)), item["id"]))
     synced = _sync_projects(projects)
-
-    return {
-        "discovered": len(projects),
-        "added": added,
-        "synced": synced,
-        "projects": projects,
-    }
+    return {"discovered": len(projects), "added": added, "synced": synced, "projects": projects}
