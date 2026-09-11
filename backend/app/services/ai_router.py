@@ -18,7 +18,7 @@ class AIProviderRouter:
 
     def __init__(self) -> None:
         self.ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2")
+        self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.codex = CodexProvider()
@@ -48,7 +48,7 @@ class AIProviderRouter:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=180) as response:
             data = json.loads(response.read().decode())
         return AIResponse("ollama", self.ollama_model, data["response"])
 
@@ -64,7 +64,7 @@ class AIProviderRouter:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=60) as response:
             data = json.loads(response.read().decode())
         text = data["candidates"][0]["content"]["parts"][0]["text"]
         return AIResponse("gemini", self.gemini_model, text)
