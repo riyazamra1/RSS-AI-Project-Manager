@@ -6,7 +6,7 @@ from ..db import get_connection
 
 
 class GitHubExecutor:
-    """Discovers GitHub repositories and queues one safe maintenance task per project."""
+    """Discovers accessible GitHub repositories and queues one safe maintenance task per project."""
 
     def __init__(self) -> None:
         self.owner = os.getenv("GITHUB_OWNER", "riyazamra1")
@@ -17,7 +17,7 @@ class GitHubExecutor:
         queued = 0
         with get_connection() as conn:
             for repo in repos:
-                if repo.get("fork"):
+                if repo.get("fork") or repo.get("archived") or repo.get("disabled"):
                     continue
                 project = conn.execute(
                     "SELECT id FROM projects WHERE repository=%s AND enabled=true LIMIT 1",
@@ -41,13 +41,25 @@ class GitHubExecutor:
         return {"repositories_seen": len(repos), "queued": queued}
 
     def _repos(self) -> list[dict]:
-        request = urllib.request.Request(
-            f"https://api.github.com/users/{self.owner}/repos?per_page=100&type=all",
-            headers={
-                "Accept": "application/vnd.github+json",
-                "User-Agent": "RSS-AI-Project-Manager",
-                **({"Authorization": f"Bearer {self.token}"} if self.token else {}),
-            },
-        )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.loads(response.read().decode())
+        """List repositories accessible to the authenticated token, including private repos."""
+        repos: list[dict] = []
+        page = 1
+        while True:
+            request = urllib.request.Request(
+                f"https://api.github.com/user/repos?per_page=100&page={page}&affiliation=owner,collaborator,organization_member&sort=full_name",
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2026-03-10",
+                    "User-Agent": "RSS-AI-Project-Manager",
+                    **({"Authorization": f"Bearer {self.token}"} if self.token else {}),
+                },
+            )
+            with urllib.request.urlopen(request, timeout=30) as response:
+                batch = json.loads(response.read().decode())
+            if not isinstance(batch, list):
+                raise RuntimeError(f"GitHub repository API returned unexpected response: {batch}")
+            repos.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        return repos
