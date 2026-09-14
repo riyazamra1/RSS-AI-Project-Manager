@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synchronize the RSS project registry from GitHub and build a dynamic queue.
+"""Synchronize the RSS project registry from GitHub.
 
 GitHub is the repository inventory source of truth. config/projects.json remains
 policy/configuration: discovery patterns and explicit exclusions are preserved.
@@ -11,12 +11,10 @@ import fnmatch
 import json
 import os
 import pathlib
-import urllib.error
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PROJECTS = ROOT / "config" / "projects.json"
-GENERATED = ROOT / "config" / "generated-tasks.json"
 STATE = ROOT / "config" / "scheduler-state.json"
 OWNER = "riyazamra1"
 
@@ -35,14 +33,11 @@ def repo_matches(name: str, patterns: list[str]) -> bool:
 
 def project_id(name: str) -> str:
     value = name.lower().replace("_", "-")
-    value = "-".join(part for part in value.split("-") if part)
-    return value
+    return "-".join(part for part in value.split("-") if part)
 
 
 def display_name(name: str) -> str:
-    if name == "RSS-Flux-Runner":
-        return "FLUX RUNNER"
-    return name.replace("_", " ").replace("-", " ").upper()
+    return "FLUX RUNNER" if name == "RSS-Flux-Runner" else name.replace("_", " ").replace("-", " ").upper()
 
 
 def category(name: str) -> str:
@@ -62,11 +57,10 @@ def main() -> None:
         config = json.load(f)
 
     discovery = config.setdefault("discovery", {})
-    patterns = discovery.get("include_patterns", [])
-    excludes = set(discovery.get("exclude_repositories", []))
-    # Keep the actual current website repo name supported as well as the legacy spelling.
+    patterns = list(discovery.get("include_patterns", []))
     if "Razeen-Secure-Solution-Website" not in patterns:
         patterns.append("Razeen-Secure-Solution-Website")
+    excludes = set(discovery.get("exclude_repositories", []))
     excludes.update({"RSS-AI-Project-Manager", "RSS-Autopilot", "RSS-Project-Autopilot", "RSS_Invoice_and_Estimate"})
 
     repositories: list[dict] = []
@@ -84,9 +78,7 @@ def main() -> None:
     discovered: list[dict] = []
     for repo in repositories:
         name = repo.get("name", "")
-        if not name or repo.get("fork"):
-            continue
-        if name in excludes or not repo_matches(name, patterns):
+        if not name or repo.get("fork") or name in excludes or not repo_matches(name, patterns):
             continue
         full = repo.get("full_name") or f"{OWNER}/{name}"
         old = existing.get(full, {})
@@ -103,12 +95,13 @@ def main() -> None:
         })
 
     discovered.sort(key=lambda p: (not p["enabled"], p["priority"], p["repository"].lower()))
+    active = sum(1 for p in discovered if p["enabled"] and not p["archived"])
     config["version"] = max(int(config.get("version", 1)), 5)
-    config["discovery"]["last_sync"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+    config["discovery"]["include_patterns"] = patterns
+    config["discovery"]["exclude_repositories"] = sorted(excludes)
     config["discovery"]["github_repository_count"] = len(repositories)
-    config["discovery"]["active_project_count"] = sum(1 for p in discovered if p["enabled"] and not p["archived"])
+    config["discovery"]["active_project_count"] = active
     config["projects"] = discovered
-
     PROJECTS.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
     state = {"cursor": 0}
@@ -118,12 +111,12 @@ def main() -> None:
         except json.JSONDecodeError:
             pass
     state["project_count"] = len(discovered)
-    state["active_project_count"] = sum(1 for p in discovered if p["enabled"] and not p["archived"])
+    state["active_project_count"] = active
     state["repositories_seen"] = len(repositories)
     STATE.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 
     print(f"GitHub repositories seen: {len(repositories)}")
-    print(f"Active discovered RSS projects: {state['active_project_count']}")
+    print(f"Active discovered RSS projects: {active}")
 
 
 if __name__ == "__main__":
