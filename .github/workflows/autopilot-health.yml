@@ -1,0 +1,17 @@
+name: RSS AI Project Manager — Autopilot Health
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m json.tool config/projects.json >/dev/null
+      - run: python3 -m json.tool config/tasks.json >/dev/null
+      - run: python3 -m json.tool config/autopilot.json >/dev/null
+      - run: bash scripts/project-health.sh
