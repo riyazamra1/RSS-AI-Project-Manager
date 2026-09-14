@@ -22,7 +22,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Select next runnable task
+      - name: Discover and reconcile RSS repositories
+        env:
+          RSS_AUTOPILOT_GITHUB_TOKEN: ${{ secrets.RSS_GITHUB_TOKEN }}
+        run: |
+          test -n "$RSS_AUTOPILOT_GITHUB_TOKEN" || { echo 'Missing RSS_GITHUB_TOKEN secret'; exit 10; }
+          python3 scripts/discover-projects.py
+          git config user.name 'RSS AI Project Manager'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ! git diff --quiet -- config/projects.json config/scheduler-state.json; then
+            git add config/projects.json config/scheduler-state.json
+            git commit -m 'automation: reconcile discovered RSS projects'
+            git push
+          fi
+
+      - name: Select next runnable task or dynamic project task
         id: task
         shell: python
         run: |
@@ -31,6 +45,8 @@ jobs:
               data = json.load(f)
           with open('config/projects.json', encoding='utf-8') as f:
               project_data = json.load(f)
+          with open('config/scheduler-state.json', encoding='utf-8') as f:
+              state = json.load(f)
 
           tasks = data.get('tasks', [])
           by_id = {t['id']: t for t in tasks}
@@ -45,28 +61,36 @@ jobs:
               deps = task.get('depends_on', [])
               if any(by_id.get(dep, {}).get('status') != 'completed' for dep in deps):
                   continue
-              project_id = task.get('project')
-              project = projects.get(project_id, {})
-              if not project.get('enabled', False):
+              project = projects.get(task.get('project'), {})
+              if not project.get('enabled') or not project.get('repository'):
                   continue
-              if not project.get('repository'):
-                  raise SystemExit(f'No repository mapping found for project: {project_id}')
               selected = task
               break
 
+          dynamic = False
           if not selected:
-              print('No runnable task.')
-              with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
-                  out.write('run=false\n')
-              raise SystemExit(0)
+              active = [p for p in projects.values() if p.get('enabled') and not p.get('archived')]
+              active.sort(key=lambda p: (p.get('priority', 9999), p.get('repository', '').lower()))
+              if not active:
+                  raise SystemExit('No active discovered RSS projects.')
+              cursor = int(state.get('cursor', 0)) % len(active)
+              project = active[cursor]
+              dynamic = True
+              selected = {
+                  'id': f"dynamic-{project['id']}",
+                  'title': f"Autonomous maintenance: inspect CI, build and tests for {project['name']} and implement one small safe improvement",
+                  'project': project['id'],
+                  'priority': 10000,
+              }
 
           repository = projects[selected['project']]['repository']
-          print(f"Selected {selected['id']} -> {repository}")
+          print(f"Selected {'dynamic' if dynamic else 'roadmap'} task: {selected['id']} -> {repository}")
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('run=true\n')
               out.write(f"task_id={selected['id']}\n")
               out.write(f"repository={repository}\n")
               out.write(f"title={selected['title']}\n")
+              out.write(f"dynamic={'true' if dynamic else 'false'}\n")
 
       - name: Setup Node.js
         if: steps.task.outputs.run == 'true'
@@ -89,29 +113,41 @@ jobs:
           test -n "$GEMINI_API_KEY" || { echo 'Missing GEMINI_API_KEY secret'; exit 11; }
           bash scripts/autopilot.sh "${{ steps.task.outputs.repository }}" "${{ steps.task.outputs.title }}"
 
-      - name: Record successful task handoff
+      - name: Record successful task handoff and advance dynamic scheduler
         if: success() && steps.task.outputs.run == 'true'
         env:
           TASK_ID: ${{ steps.task.outputs.task_id }}
+          DYNAMIC: ${{ steps.task.outputs.dynamic }}
         run: |
           python3 - <<'PY'
           import json, os
-          path = 'config/tasks.json'
-          with open(path, encoding='utf-8') as f:
-              data = json.load(f)
-          for task in data.get('tasks', []):
-              if task.get('id') == os.environ['TASK_ID']:
-                  task['status'] = 'in_review'
-                  task['last_automation'] = os.environ.get('GITHUB_RUN_ID')
-                  break
-          with open(path, 'w', encoding='utf-8') as f:
-              json.dump(data, f, indent=2)
-              f.write('\n')
+          if os.environ['DYNAMIC'] == 'true':
+              path = 'config/scheduler-state.json'
+              with open(path, encoding='utf-8') as f:
+                  state = json.load(f)
+              state['cursor'] = int(state.get('cursor', 0)) + 1
+              state['last_task'] = os.environ['TASK_ID']
+              state['last_automation'] = os.environ.get('GITHUB_RUN_ID')
+              with open(path, 'w', encoding='utf-8') as f:
+                  json.dump(state, f, indent=2)
+                  f.write('\n')
+          else:
+              path = 'config/tasks.json'
+              with open(path, encoding='utf-8') as f:
+                  data = json.load(f)
+              for task in data.get('tasks', []):
+                  if task.get('id') == os.environ['TASK_ID']:
+                      task['status'] = 'in_review'
+                      task['last_automation'] = os.environ.get('GITHUB_RUN_ID')
+                      break
+              with open(path, 'w', encoding='utf-8') as f:
+                  json.dump(data, f, indent=2)
+                  f.write('\n')
           PY
           git config user.name 'RSS AI Project Manager'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add config/tasks.json
-          git commit -m "automation: hand off $TASK_ID to review"
+          git add config/tasks.json config/scheduler-state.json
+          git diff --cached --quiet || git commit -m "automation: advance $TASK_ID"
           git push
 
       - name: Automation heartbeat
@@ -120,4 +156,5 @@ jobs:
           echo "RSS 24x7 orchestrator heartbeat: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "Task: ${{ steps.task.outputs.task_id }}"
           echo "Repository: ${{ steps.task.outputs.repository }}"
+          echo "Dynamic: ${{ steps.task.outputs.dynamic }}"
           echo "Run: ${{ steps.task.outputs.run }}"
