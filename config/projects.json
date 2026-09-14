@@ -1,13 +1,28 @@
 {
-  "version": 4,
+  "version": 5,
   "discovery": {
     "enabled": true,
     "provider": "github",
     "owner": "riyazamra1",
-    "include_patterns": ["RSS-*", "RSS_*", "Razeen_Secure_Solution_Website"],
-    "exclude_repositories": ["Riyaz", "Riyaz-RDP", "Razeen-Secure-Solution-Website", "RSS-Autopilot", "RSS-Project-Autopilot"],
+    "include_patterns": [
+      "RSS-*",
+      "RSS_*",
+      "Razeen_Secure_Solution_Website",
+      "Razeen-Secure-Solution-Website"
+    ],
+    "exclude_repositories": [
+      "RSS-AI-Project-Manager",
+      "RSS-Autopilot",
+      "RSS-Project-Autopilot",
+      "RSS_Invoice_and_Estimate",
+      "Razeen-Secure-Solution-Website",
+      "Riyaz",
+      "Riyaz-RDP"
+    ],
     "sync_future_repositories": true,
-    "no_hardcoded_project_limit": true
+    "no_hardcoded_project_limit": true,
+    "github_repository_count": 28,
+    "active_project_count": 22
   },
   "controller": {
     "name": "RSS AI Project Manager",
@@ -15,20 +30,247 @@
     "autopilot_engine": "internal"
   },
   "projects": [
-    {"id":"rss-cloud-sync","name":"RSS CLOUD SYNC","repository":"riyazamra1/RSS-Cloud-Sync","enabled":true,"priority":1,"category":"product","role":"pilot"},
-    {"id":"rss-money-manager","name":"RSS MONEY MANAGER","repository":"riyazamra1/RSS-Money-Manager","enabled":true,"priority":2,"category":"product"},
-    {"id":"rss-password-manager","name":"RSS PASSWORD MANAGER","repository":"riyazamra1/RSS-Password-Manager","enabled":true,"priority":3,"category":"product"},
-    {"id":"rss-ai-assistant","name":"RSS AI ASSISTANT","repository":"riyazamra1/RSS-Ai-Assistant","enabled":true,"priority":4,"category":"product"},
-    {"id":"rss-clipboard","name":"RSS CLIPBOARD","repository":"riyazamra1/RSS-Clipboard","enabled":true,"priority":5,"category":"product"},
-    {"id":"rss-launcher","name":"RSS LAUNCHER","repository":"riyazamra1/RSS-Launcher","enabled":true,"priority":6,"category":"product"},
-    {"id":"rss-rdp-cloud-pc","name":"RSS RDP CLOUD PC","repository":"riyazamra1/RSS-RDP-Cloud-PC","enabled":true,"priority":7,"category":"product"},
-    {"id":"rss-device-guardian","name":"RSS DEVICE GUARDIAN","repository":"riyazamra1/RSS-Device-Guardian","enabled":true,"priority":8,"category":"product"},
-    {"id":"rss-caller-id","name":"RSS CALLER ID","repository":"riyazamra1/RSS-Caller-ID","enabled":true,"priority":9,"category":"product"},
-    {"id":"rss-whatsapp-automation","name":"RSS WHATSAPP AUTOMATION","repository":"riyazamra1/RSS-Whatsapp-Automation","enabled":true,"priority":10,"category":"product"},
-    {"id":"rss-mobile-reload-system","name":"RSS MOBILE RELOAD SYSTEM","repository":"riyazamra1/RSS-Mobile-Reload-System","enabled":true,"priority":11,"category":"product"},
-    {"id":"razeen-secure-solution-website","name":"RAZEEN SECURE SOLUTION WEBSITE","repository":"riyazamra1/Razeen_Secure_Solution_Website","enabled":true,"priority":12,"category":"website"},
-    {"id":"rss-invoice-maker","name":"RSS INVOICE MAKER","repository":"riyazamra1/RSS-Invoice-Maker","enabled":true,"priority":13,"category":"product"},
-    {"id":"rss-social-share","name":"RSS SOCIAL SHARE","repository":"riyazamra1/RSS-Social-Share","enabled":true,"priority":14,"category":"product"},
-    {"id":"rss-flux-runner","name":"FLUX RUNNER","repository":"riyazamra1/RSS-Flux-Runner","enabled":true,"priority":15,"category":"game"}
+    {
+      "id": "rss-cloud-sync",
+      "name": "RSS CLOUD SYNC",
+      "repository": "riyazamra1/RSS-Cloud-Sync",
+      "enabled": true,
+      "priority": 1,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-money-manager",
+      "name": "RSS MONEY MANAGER",
+      "repository": "riyazamra1/RSS-Money-Manager",
+      "enabled": true,
+      "priority": 2,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-password-manager",
+      "name": "RSS PASSWORD MANAGER",
+      "repository": "riyazamra1/RSS-Password-Manager",
+      "enabled": true,
+      "priority": 3,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-ai-assistant",
+      "name": "RSS AI ASSISTANT",
+      "repository": "riyazamra1/RSS-Ai-Assistant",
+      "enabled": true,
+      "priority": 4,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-clipboard",
+      "name": "RSS CLIPBOARD",
+      "repository": "riyazamra1/RSS-Clipboard",
+      "enabled": true,
+      "priority": 5,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-launcher",
+      "name": "RSS LAUNCHER",
+      "repository": "riyazamra1/RSS-Launcher",
+      "enabled": true,
+      "priority": 6,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-rdp-cloud-pc",
+      "name": "RSS RDP CLOUD PC",
+      "repository": "riyazamra1/RSS-RDP-Cloud-PC",
+      "enabled": true,
+      "priority": 7,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-device-guardian",
+      "name": "RSS DEVICE GUARDIAN",
+      "repository": "riyazamra1/RSS-Device-Guardian",
+      "enabled": true,
+      "priority": 8,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-caller-id",
+      "name": "RSS CALLER ID",
+      "repository": "riyazamra1/RSS-Caller-ID",
+      "enabled": true,
+      "priority": 9,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-whatsapp-automation",
+      "name": "RSS WHATSAPP AUTOMATION",
+      "repository": "riyazamra1/RSS-Whatsapp-Automation",
+      "enabled": true,
+      "priority": 10,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-mobile-reload-system",
+      "name": "RSS MOBILE RELOAD SYSTEM",
+      "repository": "riyazamra1/RSS-Mobile-Reload-System",
+      "enabled": true,
+      "priority": 11,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-invoice-maker",
+      "name": "RSS INVOICE MAKER",
+      "repository": "riyazamra1/RSS-Invoice-Maker",
+      "enabled": true,
+      "priority": 13,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-social-share",
+      "name": "RSS SOCIAL SHARE",
+      "repository": "riyazamra1/RSS-Social-Share",
+      "enabled": true,
+      "priority": 14,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-flux-runner",
+      "name": "FLUX RUNNER",
+      "repository": "riyazamra1/RSS-Flux-Runner",
+      "enabled": true,
+      "priority": 15,
+      "category": "game",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-cloud-sync-deploy",
+      "name": "RSS CLOUD SYNC DEPLOY",
+      "repository": "riyazamra1/RSS-Cloud-Sync-Deploy",
+      "enabled": true,
+      "priority": 1000,
+      "category": "infrastructure",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-cloud-sync-server",
+      "name": "RSS CLOUD SYNC SERVER",
+      "repository": "riyazamra1/RSS-Cloud-Sync-Server",
+      "enabled": true,
+      "priority": 1000,
+      "category": "infrastructure",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-core",
+      "name": "RSS CORE",
+      "repository": "riyazamra1/RSS-Core",
+      "enabled": true,
+      "priority": 1000,
+      "category": "infrastructure",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-downloader",
+      "name": "RSS DOWNLOADER",
+      "repository": "riyazamra1/RSS-Downloader",
+      "enabled": true,
+      "priority": 1000,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-fast-transfer",
+      "name": "RSS FAST TRANSFER",
+      "repository": "riyazamra1/RSS-Fast-Transfer",
+      "enabled": true,
+      "priority": 1000,
+      "category": "product",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-liquid-flow",
+      "name": "RSS LIQUID FLOW",
+      "repository": "riyazamra1/RSS-Liquid-Flow",
+      "enabled": true,
+      "priority": 1000,
+      "category": "game",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-omi-kings",
+      "name": "RSS OMI KINGS",
+      "repository": "riyazamra1/RSS-Omi-Kings",
+      "enabled": true,
+      "priority": 1000,
+      "category": "game",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    },
+    {
+      "id": "rss-puzzle-quest",
+      "name": "RSS PUZZLE QUEST",
+      "repository": "riyazamra1/RSS-Puzzle-Quest",
+      "enabled": true,
+      "priority": 1000,
+      "category": "game",
+      "discovered": true,
+      "default_branch": "main",
+      "archived": false
+    }
   ]
 }
