@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "RSS Autopilot Engine",
+  "mode": "safe",
+  "cost_policy": "zero_dollar_first",
+  "human_gate": true,
+  "pilot_project": "rss-cloud-sync",
+  "execution": {
+    "github_actions": true,
+    "self_hosted_runner": false,
+    "oracle_instance": false,
+    "rdp_runner": false
+  },
+  "rules": {
+    "never_commit_secrets": true,
+    "never_delete_without_approval": true,
+    "never_publish_without_approval": true,
+    "never_merge_destructive_change_automatically": true,
+    "build_before_marking_complete": true,
+    "test_before_marking_complete": true
+  }
+}
