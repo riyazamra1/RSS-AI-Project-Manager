@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "default_agent": "gemini",
+  "fallback_agents": [],
+  "automation": {
+    "max_fix_attempts": 5,
+    "max_task_minutes": 45,
+    "require_build_pass": true,
+    "require_tests_pass": false,
+    "create_pull_request": true,
+    "auto_merge": false,
+    "allow_force_push": false,
+    "allow_release": false,
+    "allow_deployment": false
+  },
+  "gemini": {
+    "headless": true,
+    "approval_mode": "yolo",
+    "output_format": "json",
+    "sandbox": false
+  }
+}
