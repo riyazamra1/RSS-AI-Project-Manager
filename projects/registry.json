@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "controller": "RSS AI Project Manager",
+  "autopilot_engine": "internal",
+  "projects": [
+    {"name":"RSS Cloud Sync","repository":"riyazamra1/RSS-Cloud-Sync","type":"android","pilot":true,"enabled":true,"priority":1},
+    {"name":"RSS AI Assistant","repository":"riyazamra1/RSS-Ai-Assistant","type":"android","pilot":false,"enabled":true,"priority":2},
+    {"name":"RSS Money Manager","repository":"riyazamra1/RSS-Money-Manager","type":"android","pilot":false,"enabled":true,"priority":3},
+    {"name":"RSS Invoice Maker","repository":"riyazamra1/RSS-Invoice-Maker","type":"android","pilot":false,"enabled":true,"priority":4}
+  ]
+}
