@@ -29,9 +29,14 @@ jobs:
           import json, os
           with open('config/tasks.json', encoding='utf-8') as f:
               data = json.load(f)
+          with open('config/projects.json', encoding='utf-8') as f:
+              project_data = json.load(f)
+
           tasks = data.get('tasks', [])
           by_id = {t['id']: t for t in tasks}
+          projects = {p['id']: p for p in project_data.get('projects', [])}
           selected = None
+
           for task in sorted(tasks, key=lambda x: (x.get('priority', 9999), x.get('id', ''))):
               if task.get('status') not in ('pending', 'in_progress'):
                   continue
@@ -40,18 +45,27 @@ jobs:
               deps = task.get('depends_on', [])
               if any(by_id.get(dep, {}).get('status') != 'completed' for dep in deps):
                   continue
+              project_id = task.get('project')
+              project = projects.get(project_id, {})
+              if not project.get('enabled', False):
+                  continue
+              if not project.get('repository'):
+                  raise SystemExit(f'No repository mapping found for project: {project_id}')
               selected = task
               break
+
           if not selected:
               print('No runnable task.')
               with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
                   out.write('run=false\n')
               raise SystemExit(0)
-          print(f"Selected {selected['id']} -> {selected['repository']}")
+
+          repository = projects[selected['project']]['repository']
+          print(f"Selected {selected['id']} -> {repository}")
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('run=true\n')
               out.write(f"task_id={selected['id']}\n")
-              out.write(f"repository={selected['repository']}\n")
+              out.write(f"repository={repository}\n")
               out.write(f"title={selected['title']}\n")
 
       - name: Setup Node.js
@@ -67,11 +81,11 @@ jobs:
       - name: Run RSS AI DevOps execution engine
         if: steps.task.outputs.run == 'true'
         env:
-          RSS_AUTOPILOT_GITHUB_TOKEN: ${{ secrets.RSS_AUTOPILOT_GITHUB_TOKEN }}
+          RSS_AUTOPILOT_GITHUB_TOKEN: ${{ secrets.RSS_GITHUB_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           RSS_AUTOPILOT_AGENT: gemini
         run: |
-          test -n "$RSS_AUTOPILOT_GITHUB_TOKEN" || { echo 'Missing RSS_AUTOPILOT_GITHUB_TOKEN secret'; exit 10; }
+          test -n "$RSS_AUTOPILOT_GITHUB_TOKEN" || { echo 'Missing RSS_GITHUB_TOKEN secret'; exit 10; }
           test -n "$GEMINI_API_KEY" || { echo 'Missing GEMINI_API_KEY secret'; exit 11; }
           bash scripts/autopilot.sh "${{ steps.task.outputs.repository }}" "${{ steps.task.outputs.title }}"
 
