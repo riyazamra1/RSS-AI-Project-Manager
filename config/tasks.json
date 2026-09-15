@@ -1,9 +1,48 @@
 {
   "version": 2,
   "tasks": [
-    {"id":"phase-a-001","project":"rss-ai-project-manager","title":"Unify Project Manager and Autopilot into one controller","status":"completed","priority":1,"depends_on":[],"human_action_required":false},
-    {"id":"phase-a-002","project":"rss-cloud-sync","title":"Connect RSS Cloud Sync as pilot repository","status":"in_progress","priority":2,"depends_on":["phase-a-001"],"human_action_required":false},
-    {"id":"phase-a-003","project":"rss-cloud-sync","title":"Run pilot health, build and test validation","status":"pending","priority":3,"depends_on":["phase-a-002"],"human_action_required":false},
-    {"id":"phase-a-004","project":"rss-ai-project-manager","title":"Enable internal Autopilot engine for future RSS repositories","status":"pending","priority":4,"depends_on":["phase-a-003"],"human_action_required":false}
+    {
+      "id": "phase-a-001",
+      "project": "rss-ai-project-manager",
+      "title": "Unify Project Manager and Autopilot into one controller",
+      "status": "completed",
+      "priority": 1,
+      "depends_on": [],
+      "human_action_required": false
+    },
+    {
+      "id": "phase-a-002",
+      "project": "rss-cloud-sync",
+      "title": "Connect RSS Cloud Sync as pilot repository",
+      "status": "in_review",
+      "priority": 2,
+      "depends_on": [
+        "phase-a-001"
+      ],
+      "human_action_required": false,
+      "last_automation": "34940974908"
+    },
+    {
+      "id": "phase-a-003",
+      "project": "rss-cloud-sync",
+      "title": "Run pilot health, build and test validation",
+      "status": "pending",
+      "priority": 3,
+      "depends_on": [
+        "phase-a-002"
+      ],
+      "human_action_required": false
+    },
+    {
+      "id": "phase-a-004",
+      "project": "rss-ai-project-manager",
+      "title": "Enable internal Autopilot engine for future RSS repositories",
+      "status": "pending",
+      "priority": 4,
+      "depends_on": [
+        "phase-a-003"
+      ],
+      "human_action_required": false
+    }
   ]
 }
