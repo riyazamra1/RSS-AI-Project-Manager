@@ -20,7 +20,6 @@ gh repo clone "$REPOSITORY" "$WORKDIR/repo" -- --depth=1
 cd "$WORKDIR/repo"
 BRANCH="autopilot/${GITHUB_RUN_ID:-manual}-$(date +%Y%m%d%H%M%S)"
 git checkout -b "$BRANCH"
-unset RSS_AUTOPILOT_GITHUB_TOKEN
 cat > "$WORKDIR/task.txt" <<EOF
 RSS AI PROJECT MANAGER AUTOPILOT TASK
 Repository: $REPOSITORY
@@ -39,7 +38,6 @@ git add -A
 git config user.name "RSS AI Project Manager"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 git commit -m "autopilot: ${TASK:0:72}"
-export GH_TOKEN="${RSS_AUTOPILOT_GITHUB_TOKEN:?Set RSS_AUTOPILOT_GITHUB_TOKEN}"
 gh auth setup-git
 git push --set-upstream origin "$BRANCH"
 gh pr create --repo "$REPOSITORY" --head "$BRANCH" --base main --title "RSS Autopilot: ${TASK:0:70}" --body "Automated by the internal RSS Autopilot engine. Build/check passed. Merge remains manual."
