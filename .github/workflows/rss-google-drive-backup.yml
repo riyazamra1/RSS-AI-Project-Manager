@@ -1,0 +1,27 @@
+name: RSS Google Drive Backup
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 1, ref: '${{ github.sha }}'}
+      - run: mkdir -p backup && git archive --format=zip --output="backup/${{ github.event.repository.name }}_${{ github.sha }}.zip" "${{ github.sha }}"
+      - name: Upload to Google Drive
+        env: {GOOGLE_SERVICE_ACCOUNT_JSON: '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}', GOOGLE_DRIVE_FOLDER_ID: '${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}', REPO_NAME: '${{ github.event.repository.name }}', COMMIT_SHA: '${{ github.sha }}'}
+        run: |
+          python3 - <<'PY'
+          import base64,json,os,time,uuid,urllib.request,urllib.parse,subprocess,tempfile
+          from pathlib import Path
+          s=os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON',''); f=os.getenv('GOOGLE_DRIVE_FOLDER_ID','')
+          if not s or not f: raise SystemExit('Missing Google Drive secrets')
+          i=json.loads(s); b=lambda x:base64.urlsafe_b64encode(x).rstrip(b'=').decode(); n=int(time.time()); h=b(json.dumps({'alg':'RS256','typ':'JWT'}).encode()); c=b(json.dumps({'iss':i['client_email'],'scope':'https://www.googleapis.com/auth/drive.file','aud':'https://oauth2.googleapis.com/token','iat':n,'exp':n+3600}).encode())
+          with tempfile.TemporaryDirectory() as d:
+            k=Path(d)/'k'; x=Path(d)/'x'; k.write_text(i['private_key'].replace('\\n','\n')); x.write_bytes((h+'.'+c).encode()); sig=subprocess.check_output(['openssl','dgst','-sha256','-sign',str(k),str(x)])
+          q=urllib.request.Request('https://oauth2.googleapis.com/token',data=urllib.parse.urlencode({'grant_type':'urn:ietf:params:oauth:grant-type:jwt-bearer','assertion':h+'.'+c+'.'+b(sig)}).encode(),headers={'Content-Type':'application/x-www-form-urlencoded'}); tok=json.load(urllib.request.urlopen(q))['access_token']
+          z=next(Path('backup').glob('*.zip')); bd='----RSS'+uuid.uuid4().hex; name=f"{os.getenv('REPO_NAME')}_{os.getenv('COMMIT_SHA')}.zip"; m=json.dumps({'name':name,'parents':[f]}).encode(); p=f'--{bd}\r\nContent-Type: application/json\r\n\r\n'.encode()+m+f'\r\n--{bd}\r\nContent-Type: application/zip\r\n\r\n'.encode()+z.read_bytes()+f'\r\n--{bd}--\r\n'.encode(); q=urllib.request.Request('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',data=p,headers={'Authorization':'Bearer '+tok,'Content-Type':'multipart/related; boundary='+bd}); print('Uploaded',json.load(urllib.request.urlopen(q)).get('id'))
+          PY
