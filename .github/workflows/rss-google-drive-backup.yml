@@ -1,5 +1,4 @@
 name: RSS Google Drive Backup
-
 on:
   push:
     branches: ["**"]
@@ -12,12 +11,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: {fetch-depth: 0}
-      - name: Create exact commit snapshot
-        env: {REPO_NAME: ${{ github.event.repository.name }}, COMMIT_SHA: ${{ github.sha }}}
-        run: mkdir -p backup && git archive --format=zip --output="backup/${REPO_NAME}_${COMMIT_SHA}.zip" "${COMMIT_SHA}"
+      - name: Create compressed encrypted commit snapshot
+        env: {REPO_NAME: ${{ github.event.repository.name }}, COMMIT_SHA: ${{ github.sha }}, BACKUP_PASSWORD: ${{ secrets.RSS_BACKUP_ENCRYPTION_PASSWORD }}}
+        run: |
+          test -n "$BACKUP_PASSWORD" || { echo "Missing RSS_BACKUP_ENCRYPTION_PASSWORD GitHub Secret"; exit 1; }
+          mkdir -p backup
+          printf '%s' "$BACKUP_PASSWORD" > "$RUNNER_TEMP/backup-password"
+          chmod 600 "$RUNNER_TEMP/backup-password"
+          git archive --format=tar "$COMMIT_SHA" | zstd -19 -T0 | gpg --batch --yes --pinentry-mode loopback --passphrase-file "$RUNNER_TEMP/backup-password" --symmetric --cipher-algo AES256 --compress-algo none --output "backup/${REPO_NAME}_${COMMIT_SHA}.tar.zst.gpg"
+          rm -f "$RUNNER_TEMP/backup-password"
       - name: Install Google Drive client
         run: python3 -m pip install --quiet google-api-python-client google-auth google-auth-httplib2
-      - name: Upload and retain 5 versions
+      - name: Upload and retain newest 5 backups
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
@@ -37,9 +42,9 @@ jobs:
           d=build('drive','v3',credentials=c,cache_discovery=False); repo=os.environ['REPO_NAME']; sha=os.environ['COMMIT_SHA']; root=os.environ['GOOGLE_DRIVE_FOLDER_ID']
           q=f"'{root}' in parents and name = '{repo}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"; fs=d.files().list(q=q,fields='files(id)',spaces='drive').execute().get('files',[])
           fid=fs[0]['id'] if fs else d.files().create(body={'name':repo,'mimeType':'application/vnd.google-apps.folder','parents':[root]},fields='id').execute()['id']
-          filename=f'{repo}_{sha}.zip'; q=f"'{fid}' in parents and name = '{filename}' and trashed = false"; existing=d.files().list(q=q,fields='files(id)',spaces='drive').execute().get('files',[])
-          if not existing: d.files().create(body={'name':filename,'parents':[fid]},media_body=MediaFileUpload(f'backup/{filename}',mimetype='application/zip',resumable=True),fields='id').execute()
-          files=d.files().list(q=f"'{fid}' in parents and mimeType = 'application/zip' and trashed = false",fields='files(id,name,createdTime)',orderBy='createdTime desc',pageSize=100,spaces='drive').execute().get('files',[])
+          filename=f'{repo}_{sha}.tar.zst.gpg'; q=f"'{fid}' in parents and name = '{filename}' and trashed = false"; existing=d.files().list(q=q,fields='files(id)',spaces='drive').execute().get('files',[])
+          if not existing: d.files().create(body={'name':filename,'parents':[fid]},media_body=MediaFileUpload(f'backup/{filename}',mimetype='application/octet-stream',resumable=True),fields='id').execute(); print('Created:',filename)
+          files=d.files().list(q=f"'{fid}' in parents and trashed = false",fields='files(id,name,createdTime)',orderBy='createdTime desc',pageSize=100,spaces='drive').execute().get('files',[])
           for old in files[5:]: d.files().delete(fileId=old['id']).execute(); print('Deleted old backup:',old['name'])
           print(f'Retention complete: {min(len(files),5)} newest backups kept for {repo}')
           PY
