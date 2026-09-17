@@ -1,27 +1,45 @@
 name: RSS Google Drive Backup
+
 on:
   push:
-    branches: ['**']
+    branches: ["**"]
   workflow_dispatch:
-permissions: {contents: read}
+permissions:
+  contents: read
 jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: {fetch-depth: 1, ref: '${{ github.sha }}'}
-      - run: mkdir -p backup && git archive --format=zip --output="backup/${{ github.event.repository.name }}_${{ github.sha }}.zip" "${{ github.sha }}"
-      - name: Upload to Google Drive
-        env: {GOOGLE_SERVICE_ACCOUNT_JSON: '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}', GOOGLE_DRIVE_FOLDER_ID: '${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}', REPO_NAME: '${{ github.event.repository.name }}', COMMIT_SHA: '${{ github.sha }}'}
+        with: {fetch-depth: 0}
+      - name: Create exact commit snapshot
+        env: {REPO_NAME: ${{ github.event.repository.name }}, COMMIT_SHA: ${{ github.sha }}}
+        run: mkdir -p backup && git archive --format=zip --output="backup/${REPO_NAME}_${COMMIT_SHA}.zip" "${COMMIT_SHA}"
+      - name: Install Google Drive client
+        run: python3 -m pip install --quiet google-api-python-client google-auth google-auth-httplib2
+      - name: Upload and retain 5 versions
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
+          test -n "$GOOGLE_SERVICE_ACCOUNT_JSON" || { echo "Missing GOOGLE_SERVICE_ACCOUNT_JSON"; exit 1; }
+          test -n "$GOOGLE_DRIVE_FOLDER_ID" || { echo "Missing GOOGLE_DRIVE_FOLDER_ID"; exit 1; }
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/google-service-account.json"
+          printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > "$GOOGLE_APPLICATION_CREDENTIALS"
           python3 - <<'PY'
-          import base64,json,os,time,uuid,urllib.request,urllib.parse,subprocess,tempfile
-          from pathlib import Path
-          s=os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON',''); f=os.getenv('GOOGLE_DRIVE_FOLDER_ID','')
-          if not s or not f: raise SystemExit('Missing Google Drive secrets')
-          i=json.loads(s); b=lambda x:base64.urlsafe_b64encode(x).rstrip(b'=').decode(); n=int(time.time()); h=b(json.dumps({'alg':'RS256','typ':'JWT'}).encode()); c=b(json.dumps({'iss':i['client_email'],'scope':'https://www.googleapis.com/auth/drive.file','aud':'https://oauth2.googleapis.com/token','iat':n,'exp':n+3600}).encode())
-          with tempfile.TemporaryDirectory() as d:
-            k=Path(d)/'k'; x=Path(d)/'x'; k.write_text(i['private_key'].replace('\\n','\n')); x.write_bytes((h+'.'+c).encode()); sig=subprocess.check_output(['openssl','dgst','-sha256','-sign',str(k),str(x)])
-          q=urllib.request.Request('https://oauth2.googleapis.com/token',data=urllib.parse.urlencode({'grant_type':'urn:ietf:params:oauth:grant-type:jwt-bearer','assertion':h+'.'+c+'.'+b(sig)}).encode(),headers={'Content-Type':'application/x-www-form-urlencoded'}); tok=json.load(urllib.request.urlopen(q))['access_token']
-          z=next(Path('backup').glob('*.zip')); bd='----RSS'+uuid.uuid4().hex; name=f"{os.getenv('REPO_NAME')}_{os.getenv('COMMIT_SHA')}.zip"; m=json.dumps({'name':name,'parents':[f]}).encode(); p=f'--{bd}\r\nContent-Type: application/json\r\n\r\n'.encode()+m+f'\r\n--{bd}\r\nContent-Type: application/zip\r\n\r\n'.encode()+z.read_bytes()+f'\r\n--{bd}--\r\n'.encode(); q=urllib.request.Request('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',data=p,headers={'Authorization':'Bearer '+tok,'Content-Type':'multipart/related; boundary='+bd}); print('Uploaded',json.load(urllib.request.urlopen(q)).get('id'))
+          import os
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+          c=service_account.Credentials.from_service_account_file(os.environ['GOOGLE_APPLICATION_CREDENTIALS'],scopes=['https://www.googleapis.com/auth/drive.file'])
+          d=build('drive','v3',credentials=c,cache_discovery=False); repo=os.environ['REPO_NAME']; sha=os.environ['COMMIT_SHA']; root=os.environ['GOOGLE_DRIVE_FOLDER_ID']
+          q=f"'{root}' in parents and name = '{repo}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"; fs=d.files().list(q=q,fields='files(id)',spaces='drive').execute().get('files',[])
+          fid=fs[0]['id'] if fs else d.files().create(body={'name':repo,'mimeType':'application/vnd.google-apps.folder','parents':[root]},fields='id').execute()['id']
+          filename=f'{repo}_{sha}.zip'; q=f"'{fid}' in parents and name = '{filename}' and trashed = false"; existing=d.files().list(q=q,fields='files(id)',spaces='drive').execute().get('files',[])
+          if not existing: d.files().create(body={'name':filename,'parents':[fid]},media_body=MediaFileUpload(f'backup/{filename}',mimetype='application/zip',resumable=True),fields='id').execute()
+          files=d.files().list(q=f"'{fid}' in parents and mimeType = 'application/zip' and trashed = false",fields='files(id,name,createdTime)',orderBy='createdTime desc',pageSize=100,spaces='drive').execute().get('files',[])
+          for old in files[5:]: d.files().delete(fileId=old['id']).execute(); print('Deleted old backup:',old['name'])
+          print(f'Retention complete: {min(len(files),5)} newest backups kept for {repo}')
           PY
