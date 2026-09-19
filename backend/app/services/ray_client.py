@@ -36,11 +36,11 @@ class RayClient:
             raise RayUnavailable(str(exc)) from exc
 
     def submit(self, task_id: str, project: str, task: str, context: str, command: list[str] | None = None) -> str:
+        if command is None or not command or not all(isinstance(part, str) and part.strip() for part in command):
+            raise RayUnavailable("RAY requires an explicit structured command")
         result = self._request("POST", "/api/v1/ray/tasks",
             {"id": task_id, "project": project, "task": task,
              "context": context, "command": command, "priority": "normal"})
-        if command is None:
-            raise RayUnavailable("RAY requires an explicit structured command")
         if not result.get("queued"):
             raise RayUnavailable("RSS Core RAY queue is not configured")
         return str(result["task"]["id"])
