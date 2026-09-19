@@ -5,6 +5,7 @@ import urllib.request
 
 from ..db import get_connection
 from .autopilot import Autopilot
+from .ray_client import RayClient, RayUnavailable
 
 
 class TaskRunner:
@@ -13,6 +14,7 @@ class TaskRunner:
     def __init__(self, autopilot: Autopilot | None = None) -> None:
         self.autopilot = autopilot or Autopilot()
         self.github_token = os.getenv("RSS_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
+        self.ray = RayClient()
 
     def run_next(self) -> dict:
         with get_connection() as conn:
@@ -30,15 +32,16 @@ class TaskRunner:
 
         try:
             context = self._load_context(task["project_id"], task["conversation_id"])
-            result = self.autopilot.execute(task["title"], context)
-            self._finish(task["id"], task["project_id"], "completed", result.output, result.provider)
-            return {
-                "status": "completed",
-                "task_id": task["id"],
-                "provider": result.provider,
-                "model": result.model,
-                "output": result.output,
-            }
+            try:
+                result = self.ray.execute(str(task["id"]), self._project_repository(task["project_id"]), task["title"], context)
+                if result["status"] == "completed":
+                    self._finish(task["id"], task["project_id"], "completed", result.get("output", ""), "ray", {"ray_task_id": result["ray_task_id"]})
+                    return {"status": "completed", "task_id": task["id"], "provider": "ray", "output": result.get("output", ""), "ray_task_id": result["ray_task_id"]}
+                raise RuntimeError(result.get("error", "RAY task failed"))
+            except RayUnavailable:
+                result = self.autopilot.execute(task["title"], context)
+                self._finish(task["id"], task["project_id"], "completed", result.output, result.provider)
+                return {"status": "completed", "task_id": task["id"], "provider": result.provider, "model": result.model, "output": result.output, "execution_path": "internal-autopilot-fallback"}
         except Exception as exc:
             self._finish(task["id"], task["project_id"], "failed", str(exc))
             return {"status": "failed", "task_id": task["id"], "error": str(exc)}
@@ -84,6 +87,13 @@ class TaskRunner:
                     f"{r['role'].upper()}: {r['content']}" for r in reversed(messages)
                 )
             return "\n".join(parts)
+
+    def _project_repository(self, project_id: str | None) -> str:
+        if not project_id:
+            return "RSS-AI-Project-Manager"
+        with get_connection() as conn:
+            row = conn.execute("SELECT repository FROM projects WHERE id=%s", (project_id,)).fetchone()
+        return (row["repository"] if row and row["repository"] else "RSS-AI-Project-Manager").split("/")[-1]
 
     def _github_context(self, repository: str) -> str:
         """Load lightweight live repository context for every central AI task."""
@@ -141,6 +151,7 @@ class TaskRunner:
         status: str,
         summary: str,
         provider: str | None = None,
+        metadata: dict | None = None,
     ) -> None:
         with get_connection() as conn:
             conn.execute(
@@ -150,6 +161,6 @@ class TaskRunner:
             conn.execute(
                 "INSERT INTO activity_log (project_id, event_type, summary, metadata) "
                 "VALUES (%s, %s, %s, %s::jsonb)",
-                (project_id, "task." + status, summary[:1000], json.dumps({"provider": provider})),
+                (project_id, "task." + status, summary[:1000], json.dumps({"provider": provider, **(metadata or {})})),
             )
             conn.commit()
