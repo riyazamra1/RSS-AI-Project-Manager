@@ -150,6 +150,26 @@ jobs:
           git diff --cached --quiet || git commit -m "automation: advance $TASK_ID"
           git push
 
+      - name: Failure diagnostics
+        if: failure()
+        run: |
+          echo "=== RSS AI Project Manager failure diagnostics ==="
+          echo "Run: $GITHUB_RUN_ID"
+          echo "SHA: $GITHUB_SHA"
+          echo "Task: ${{ steps.task.outputs.task_id }}"
+          echo "Repository: ${{ steps.task.outputs.repository }}"
+          echo "Dynamic: ${{ steps.task.outputs.dynamic }}"
+          echo "Task selected: ${{ steps.task.outputs.run }}"
+          echo "GitHub CLI: $(gh --version | head -n 1)"
+          echo "Node: $(node --version)"
+          echo "Python: $(python3 --version)"
+          if command -v gemini >/dev/null 2>&1; then gemini --version || true; else echo "Gemini CLI: NOT INSTALLED"; fi
+          bash -n scripts/autopilot.sh scripts/agent-router.sh
+          python3 -m py_compile scripts/discover-projects.py
+          echo "Controller files:"
+          git status --short
+          echo "=== End diagnostics ==="
+
       - name: Automation heartbeat
         if: always()
         run: |
