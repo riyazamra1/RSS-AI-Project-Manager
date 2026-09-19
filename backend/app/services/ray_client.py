@@ -35,16 +35,18 @@ class RayClient:
         except (urllib.error.URLError, TimeoutError) as exc:
             raise RayUnavailable(str(exc)) from exc
 
-    def submit(self, task_id: str, project: str, task: str, context: str) -> str:
+    def submit(self, task_id: str, project: str, task: str, context: str, command: list[str] | None = None) -> str:
         result = self._request("POST", "/api/v1/ray/tasks",
             {"id": task_id, "project": project, "task": task,
-             "context": context, "priority": "normal"})
+             "context": context, "command": command, "priority": "normal"})
+        if command is None:
+            raise RayUnavailable("RAY requires an explicit structured command")
         if not result.get("queued"):
             raise RayUnavailable("RSS Core RAY queue is not configured")
         return str(result["task"]["id"])
 
-    def execute(self, task_id: str, project: str, task: str, context: str) -> dict:
-        ray_task_id = self.submit(task_id, project, task, context)
+    def execute(self, task_id: str, project: str, task: str, context: str, command: list[str] | None = None) -> dict:
+        ray_task_id = self.submit(task_id, project, task, context, command)
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
             result = self._request("GET", "/api/v1/ray/tasks/" + ray_task_id)
