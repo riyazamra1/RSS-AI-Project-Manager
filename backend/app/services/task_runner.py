@@ -19,8 +19,8 @@ class TaskRunner:
     def run_next(self) -> dict:
         with get_connection() as conn:
             task = conn.execute(
-                "SELECT id, project_id, conversation_id, title, status FROM tasks "
-                "WHERE status='pending' ORDER BY created_at, id LIMIT 1"
+                "SELECT id, project_id, conversation_id, title, status, operation, arguments, command, context "
+                "FROM tasks WHERE status='pending' ORDER BY created_at, id LIMIT 1"
             ).fetchone()
             if task is None:
                 return {"status": "idle"}
@@ -32,18 +32,57 @@ class TaskRunner:
 
         try:
             context = self._load_context(task["project_id"], task["conversation_id"])
+            if task["context"]:
+                context = f"{context}\nTASK_CONTEXT:\n{task['context']}"
+            command = task["command"]
+            if isinstance(command, str):
+                try:
+                    command = json.loads(command)
+                except json.JSONDecodeError:
+                    command = None
+
             try:
                 if os.getenv("RSS_RAY_EXECUTE_TASKS", "false").lower() not in {"1", "true", "yes"}:
-                    raise RayUnavailable("RAY execution is disabled until an explicit command contract is configured")
-                result = self.ray.execute(str(task["id"]), self._project_repository(task["project_id"]), task["title"], context)
+                    raise RayUnavailable("RAY execution is disabled until explicitly enabled")
+                result = self.ray.execute(
+                    str(task["id"]),
+                    self._project_repository(task["project_id"]),
+                    task["title"],
+                    context,
+                    command,
+                )
                 if result["status"] == "completed":
-                    self._finish(task["id"], task["project_id"], "completed", result.get("output", ""), "ray", {"ray_task_id": result["ray_task_id"]})
-                    return {"status": "completed", "task_id": task["id"], "provider": "ray", "output": result.get("output", ""), "ray_task_id": result["ray_task_id"]}
+                    self._finish(
+                        task["id"],
+                        task["project_id"],
+                        "completed",
+                        result.get("output", ""),
+                        "ray",
+                        {
+                            "ray_task_id": result["ray_task_id"],
+                            "operation": task["operation"],
+                            "arguments": task["arguments"] or {},
+                        },
+                    )
+                    return {
+                        "status": "completed",
+                        "task_id": task["id"],
+                        "provider": "ray",
+                        "output": result.get("output", ""),
+                        "ray_task_id": result["ray_task_id"],
+                    }
                 raise RuntimeError(result.get("error", "RAY task failed"))
             except RayUnavailable:
                 result = self.autopilot.execute(task["title"], context)
                 self._finish(task["id"], task["project_id"], "completed", result.output, result.provider)
-                return {"status": "completed", "task_id": task["id"], "provider": result.provider, "model": result.model, "output": result.output, "execution_path": "internal-autopilot-fallback"}
+                return {
+                    "status": "completed",
+                    "task_id": task["id"],
+                    "provider": result.provider,
+                    "model": result.model,
+                    "output": result.output,
+                    "execution_path": "internal-autopilot-fallback",
+                }
         except Exception as exc:
             self._finish(task["id"], task["project_id"], "failed", str(exc))
             return {"status": "failed", "task_id": task["id"], "error": str(exc)}
