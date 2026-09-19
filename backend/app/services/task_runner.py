@@ -33,6 +33,8 @@ class TaskRunner:
         try:
             context = self._load_context(task["project_id"], task["conversation_id"])
             try:
+                if os.getenv("RSS_RAY_EXECUTE_TASKS", "false").lower() not in {"1", "true", "yes"}:
+                    raise RayUnavailable("RAY execution is disabled until an explicit command contract is configured")
                 result = self.ray.execute(str(task["id"]), self._project_repository(task["project_id"]), task["title"], context)
                 if result["status"] == "completed":
                     self._finish(task["id"], task["project_id"], "completed", result.get("output", ""), "ray", {"ray_task_id": result["ray_task_id"]})
