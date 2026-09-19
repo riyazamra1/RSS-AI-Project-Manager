@@ -5,16 +5,29 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
       - name: Validate project registry
-        run: python3 -m json.tool config/projects.json >/dev/null
+        run: python -m json.tool config/projects.json >/dev/null
+
       - name: Validate task queue
-        run: python3 -m json.tool config/tasks.json >/dev/null
+        run: python -m json.tool config/tasks.json >/dev/null
+
       - name: Validate safety files
-        run: test -s AUTOPILOT_RULES.md && test -s GEMINI.md
+        shell: bash
+        run: |
+          test -s AUTOPILOT_RULES.md
+          test -s GEMINI.md
