@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     github_oauth_client_id: str = ""
     github_oauth_client_secret: str = ""
+    worker_token: str = ""
 
     # Remote execution is fail-closed. Production must explicitly enable RAY
     # only after tenant/service authorization has been configured.
