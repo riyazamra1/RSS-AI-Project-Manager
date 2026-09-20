@@ -1,0 +1,25 @@
+name: RAY Live Integration Smoke Test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check RSS Core production health
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --max-time 20 https://rsscore.cv/health
+          echo
+
+      - name: Check RAY production health
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --max-time 20 https://ray.rsscore.cv/health
+          echo
