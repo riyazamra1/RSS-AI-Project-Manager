@@ -22,7 +22,11 @@ class RayClient:
     def _request(self, method: str, path: str, payload: dict | None = None) -> dict:
         if not self.base_url or not self.token:
             raise RayUnavailable("RSS Core RAY integration is not configured")
+        if self.base_url.startswith("http://") and settings.require_https_integrations:
+            raise RayUnavailable("HTTPS is required for RSS Core RAY integration")
         data = json.dumps(payload).encode() if payload is not None else None
+        if data is not None and len(data) > settings.max_ray_payload_bytes:
+            raise RayUnavailable("RAY request payload exceeds the configured security limit")
         request = urllib.request.Request(
             self.base_url + path, data=data, method=method,
             headers={"Authorization": "Bearer " + self.token,
@@ -31,7 +35,10 @@ class RayClient:
         )
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
-                return json.loads(response.read().decode("utf-8"))
+                raw = response.read(settings.max_ray_response_bytes + 1)
+                if len(raw) > settings.max_ray_response_bytes:
+                    raise RayUnavailable("RAY response exceeds the configured security limit")
+                return json.loads(raw.decode("utf-8"))
         except (urllib.error.URLError, TimeoutError) as exc:
             raise RayUnavailable(str(exc)) from exc
 
