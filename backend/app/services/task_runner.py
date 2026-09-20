@@ -138,7 +138,15 @@ class TaskRunner:
         return (row["repository"] if row and row["repository"] else "RSS-AI-Project-Manager").split("/")[-1]
 
     def _github_context(self, repository: str) -> str:
-        """Load lightweight live repository context for every central AI task."""
+        """Load repository context only for explicitly authorized repositories."""
+        allowed = {
+            item.strip().lower()
+            for item in settings.github_allowed_repositories.split(",")
+            if item.strip()
+        }
+        if repository.lower() not in allowed:
+            return "GITHUB_CONTEXT_BLOCKED: repository is not on the server-side allowlist"
+
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2026-03-10",
