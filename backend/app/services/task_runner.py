@@ -141,7 +141,7 @@ class TaskRunner:
         if not project_id:
             return "RSS-AI-Project-Manager"
         with get_connection() as conn:
-            row = conn.execute("SELECT repository FROM projects WHERE id=%s AND workspace_id=%s", (project_id, task["workspace_id"])).fetchone()
+            row = conn.execute("SELECT repository FROM projects WHERE id=%s AND workspace_id=%s", (project_id, workspace_id)).fetchone()
         return (row["repository"] if row and row["repository"] else "RSS-AI-Project-Manager").split("/")[-1]
 
     def _github_context(self, repository: str) -> str:
