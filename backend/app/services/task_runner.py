@@ -20,7 +20,7 @@ class TaskRunner:
     def run_next(self) -> dict:
         with get_connection() as conn:
             task = conn.execute(
-                "SELECT id, project_id, conversation_id, title, status, operation, arguments, command, context "
+                "SELECT id, project_id, conversation_id, workspace_id, title, status, operation, arguments, command, context "
                 "FROM tasks WHERE status='pending' ORDER BY created_at, id LIMIT 1"
             ).fetchone()
             if task is None:
@@ -38,7 +38,7 @@ class TaskRunner:
             conn.commit()
 
         try:
-            context = self._load_context(task["project_id"], task["conversation_id"])
+            context = self._load_context(task["workspace_id"], task["project_id"], task["conversation_id"])
             if task["context"]:
                 context = f"{context}\nTASK_CONTEXT:\n{task['context']}"
             command = task["command"]
@@ -54,7 +54,7 @@ class TaskRunner:
                     raise RayUnavailable("RAY execution is disabled until explicitly enabled")
                 result = self.ray.execute(
                     str(task["id"]),
-                    self._project_repository(task["project_id"]),
+                    self._project_repository(task["workspace_id"], task["project_id"]),
                     task["title"],
                     context,
                     command,
@@ -95,14 +95,14 @@ class TaskRunner:
             self._finish(task["id"], task["workspace_id"], task["project_id"], "failed", str(exc))
             return {"status": "failed", "task_id": task["id"], "error": str(exc)}
 
-    def _load_context(self, project_id: str | None, conversation_id: int | None) -> str:
+    def _load_context(self, workspace_id: str, project_id: str | None, conversation_id: int | None) -> str:
         with get_connection() as conn:
             parts: list[str] = []
             repository = None
             if project_id:
                 project = conn.execute(
                     "SELECT id, name, repository, enabled, priority, workspace_id FROM projects WHERE id=%s AND workspace_id=%s",
-                    (project_id, task["workspace_id"]),
+                    (project_id, workspace_id),
                 ).fetchone()
                 if project:
                     repository = project["repository"]
@@ -116,7 +116,7 @@ class TaskRunner:
                 memories = conn.execute(
                     "SELECT memory_type, memory_key, content FROM project_memory "
                     "WHERE project_id=%s AND workspace_id=%s ORDER BY updated_at DESC LIMIT 30",
-                    (project_id, task["workspace_id"]),
+                    (project_id, workspace_id),
                 ).fetchall()
                 parts.extend(
                     f"MEMORY {r['memory_type']}/{r['memory_key']}: {r['content']}"
@@ -137,7 +137,7 @@ class TaskRunner:
                 )
             return "\n".join(parts)
 
-    def _project_repository(self, project_id: str | None) -> str:
+    def _project_repository(self, workspace_id: str, project_id: str | None) -> str:
         if not project_id:
             return "RSS-AI-Project-Manager"
         with get_connection() as conn:
