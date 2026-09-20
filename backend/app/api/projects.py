@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 from ..db import get_connection
 from ..services.project_discovery import discover_projects
-from ..security import current_workspace, require_workspace_role, audit
+from ..security import current_workspace, require_workspace_role, require_worker, audit
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -55,5 +55,20 @@ def create_project(project: ProjectCreate, ctx: dict = Depends(require_workspace
     return dict(row)
 
 @router.post("/sync")
-def sync_projects(_: bool = Depends(require_workspace_role("admin"))) -> dict:
-    raise HTTPException(403, "Project synchronization is reserved for administrators")
+def sync_projects(_: bool = Depends(require_worker)) -> dict:
+    try:
+        result = discover_projects()
+        with get_connection() as conn:
+            for project in result["projects"]:
+                conn.execute(
+                    """INSERT INTO projects(id,name,repository,enabled,priority,workspace_id)
+                       VALUES(%s,%s,%s,%s,%s,'00000000-0000-0000-0000-000000000001')
+                       ON CONFLICT(id) DO UPDATE SET
+                         name=EXCLUDED.name,repository=EXCLUDED.repository,
+                         enabled=EXCLUDED.enabled,priority=EXCLUDED.priority,updated_at=NOW()""",
+                    (project["id"],project["name"],project.get("repository"),project.get("enabled",True),int(project.get("priority",100))),
+                )
+            conn.commit()
+        return {"discovered":result["discovered"],"added":result["added"],"persisted":len(result["projects"])}
+    except Exception as exc:
+        raise HTTPException(503,"Project sync failed") from exc
