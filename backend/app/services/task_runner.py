@@ -6,6 +6,7 @@ import urllib.request
 from ..db import get_connection
 from .autopilot import Autopilot
 from .ray_client import RayClient, RayUnavailable
+from ..core.config import settings
 
 
 class TaskRunner:
@@ -42,7 +43,7 @@ class TaskRunner:
                     command = None
 
             try:
-                if os.getenv("RSS_RAY_EXECUTE_TASKS", "false").lower() not in {"1", "true", "yes"}:
+                if not settings.ray_execute_tasks and os.getenv("RSS_RAY_EXECUTE_TASKS", "true").lower() not in {"1", "true", "yes"}:
                     raise RayUnavailable("RAY execution is disabled until explicitly enabled")
                 result = self.ray.execute(
                     str(task["id"]),
