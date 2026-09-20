@@ -75,12 +75,11 @@ def current_workspace(
     membership = workspace_access(user, workspace_id)
     return {"user": user, "workspace_id": workspace_id, "membership": membership}
 
-def require_workspace_role(
-    minimum_role: str,
-    ctx: dict = Depends(current_workspace),
-) -> dict:
-    workspace_access(ctx["user"], ctx["workspace_id"], minimum_role)
-    return ctx
+def require_workspace_role(minimum_role: str):
+    def dependency(ctx: dict = Depends(current_workspace)) -> dict:
+        workspace_access(ctx["user"], ctx["workspace_id"], minimum_role)
+        return ctx
+    return dependency
 
 def service_access(user: dict, workspace_id: str, service_key: str):
     workspace_access(user, workspace_id)
