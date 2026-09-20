@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     rss_core_api_token: str = ""
     ray_poll_seconds: int = 5
     ray_poll_timeout_seconds: int = 900
+    ray_execute_tasks: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
