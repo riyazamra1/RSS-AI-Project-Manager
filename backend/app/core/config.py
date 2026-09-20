@@ -9,6 +9,14 @@ class Settings(BaseSettings):
     ray_poll_seconds: int = 5
     ray_poll_timeout_seconds: int = 900
 
+    session_days: int = 30
+    oauth_state_minutes: int = 10
+    oauth_redirect_base_url: str = ""
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    github_oauth_client_id: str = ""
+    github_oauth_client_secret: str = ""
+
     # Remote execution is fail-closed. Production must explicitly enable RAY
     # only after tenant/service authorization has been configured.
     ray_execute_tasks: bool = False
