@@ -25,8 +25,14 @@ class TaskRunner:
             ).fetchone()
             if task is None:
                 return {"status": "idle"}
+            entitlement = conn.execute(
+                "SELECT enabled FROM service_entitlements WHERE workspace_id=%s AND service_key='project_manager'",
+                (task["workspace_id"],),
+            ).fetchone()
+            if not entitlement or not entitlement["enabled"]:
+                return {"status": "blocked", "task_id": task["id"], "error": "Project Manager service is disabled for this workspace"}
             conn.execute(
-                "UPDATE tasks SET status='running', updated_at=NOW() WHERE id=%s",
+                "UPDATE tasks SET status='running', started_at=COALESCE(started_at,NOW()), updated_at=NOW() WHERE id=%s AND status='pending'",
                 (task["id"],),
             )
             conn.commit()
@@ -43,7 +49,8 @@ class TaskRunner:
                     command = None
 
             try:
-                if not settings.ray_execute_tasks and os.getenv("RSS_RAY_EXECUTE_TASKS", "true").lower() not in {"1", "true", "yes"}:
+                ray_env_enabled = os.getenv("RSS_RAY_EXECUTE_TASKS", "").lower() in {"1", "true", "yes"}
+                if not settings.ray_execute_tasks or not ray_env_enabled:
                     raise RayUnavailable("RAY execution is disabled until explicitly enabled")
                 result = self.ray.execute(
                     str(task["id"]),
@@ -54,7 +61,7 @@ class TaskRunner:
                 )
                 if result["status"] == "completed":
                     self._finish(
-                        task["id"],
+                        task["id"], task["workspace_id"],
                         task["project_id"],
                         "completed",
                         result.get("output", ""),
@@ -75,7 +82,7 @@ class TaskRunner:
                 raise RuntimeError(result.get("error", "RAY task failed"))
             except RayUnavailable:
                 result = self.autopilot.execute(task["title"], context)
-                self._finish(task["id"], task["project_id"], "completed", result.output, result.provider)
+                self._finish(task["id"], task["workspace_id"], task["project_id"], "completed", result.output, result.provider)
                 return {
                     "status": "completed",
                     "task_id": task["id"],
@@ -85,7 +92,7 @@ class TaskRunner:
                     "execution_path": "internal-autopilot-fallback",
                 }
         except Exception as exc:
-            self._finish(task["id"], task["project_id"], "failed", str(exc))
+            self._finish(task["id"], task["workspace_id"], task["project_id"], "failed", str(exc))
             return {"status": "failed", "task_id": task["id"], "error": str(exc)}
 
     def _load_context(self, project_id: str | None, conversation_id: int | None) -> str:
@@ -94,8 +101,8 @@ class TaskRunner:
             repository = None
             if project_id:
                 project = conn.execute(
-                    "SELECT id, name, repository, enabled, priority FROM projects WHERE id=%s",
-                    (project_id,),
+                    "SELECT id, name, repository, enabled, priority, workspace_id FROM projects WHERE id=%s AND workspace_id=%s",
+                    (project_id, task["workspace_id"]),
                 ).fetchone()
                 if project:
                     repository = project["repository"]
@@ -108,8 +115,8 @@ class TaskRunner:
                     )
                 memories = conn.execute(
                     "SELECT memory_type, memory_key, content FROM project_memory "
-                    "WHERE project_id=%s ORDER BY updated_at DESC LIMIT 30",
-                    (project_id,),
+                    "WHERE project_id=%s AND workspace_id=%s ORDER BY updated_at DESC LIMIT 30",
+                    (project_id, task["workspace_id"]),
                 ).fetchall()
                 parts.extend(
                     f"MEMORY {r['memory_type']}/{r['memory_key']}: {r['content']}"
@@ -134,7 +141,7 @@ class TaskRunner:
         if not project_id:
             return "RSS-AI-Project-Manager"
         with get_connection() as conn:
-            row = conn.execute("SELECT repository FROM projects WHERE id=%s", (project_id,)).fetchone()
+            row = conn.execute("SELECT repository FROM projects WHERE id=%s AND workspace_id=%s", (project_id, task["workspace_id"])).fetchone()
         return (row["repository"] if row and row["repository"] else "RSS-AI-Project-Manager").split("/")[-1]
 
     def _github_context(self, repository: str) -> str:
@@ -197,6 +204,7 @@ class TaskRunner:
     def _finish(
         self,
         task_id: int,
+        workspace_id: str,
         project_id: str | None,
         status: str,
         summary: str,
@@ -205,12 +213,12 @@ class TaskRunner:
     ) -> None:
         with get_connection() as conn:
             conn.execute(
-                "UPDATE tasks SET status=%s, provider=%s, updated_at=%s WHERE id=%s",
-                (status, provider, datetime.now(timezone.utc), task_id),
+                "UPDATE tasks SET status=%s, provider=%s, completed_at=CASE WHEN %s='completed' THEN NOW() ELSE completed_at END, updated_at=%s WHERE id=%s",
+                (status, provider, status, datetime.now(timezone.utc), task_id),
             )
             conn.execute(
-                "INSERT INTO activity_log (project_id, event_type, summary, metadata) "
-                "VALUES (%s, %s, %s, %s::jsonb)",
-                (project_id, "task." + status, summary[:1000], json.dumps({"provider": provider, **(metadata or {})})),
+                "INSERT INTO activity_log (project_id, workspace_id, event_type, summary, metadata) "
+                "VALUES (%s, %s, %s, %s, %s::jsonb)",
+                (project_id, workspace_id, "task." + status, summary[:1000], json.dumps({"provider": provider, **(metadata or {})})),
             )
             conn.commit()
