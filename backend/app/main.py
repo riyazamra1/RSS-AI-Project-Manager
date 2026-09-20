@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.api.ai import router as ai_router
+from app.api.auth import router as auth_router
 from app.api.autopilot import router as autopilot_router
 from app.api.conversations import router as conversations_router
 from app.api.memory import router as memory_router
@@ -8,8 +9,9 @@ from app.api.project_discovery import router as project_discovery_router
 from app.api.projects import router as projects_router
 from app.api.tasks import router as tasks_router
 
-app = FastAPI(title="RSS AI Project Manager", version="0.7.0")
+app = FastAPI(title="RSS AI Project Manager", version="0.8.0")
 
+app.include_router(auth_router)
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(project_discovery_router)
 app.include_router(memory_router, prefix="/api/v1")
