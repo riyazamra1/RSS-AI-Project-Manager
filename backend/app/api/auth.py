@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 
@@ -220,7 +220,7 @@ def login(item: LoginRequest):
 
 
 @router.post("/logout")
-def logout(user: dict = Depends(require_auth), authorization: str | None = None):
+def logout(user: dict = Depends(require_auth), authorization: str | None = Header(default=None)):
     # Bearer token is read explicitly so only the current session is revoked.
     if not authorization:
         raise HTTPException(401, "Authentication required")
