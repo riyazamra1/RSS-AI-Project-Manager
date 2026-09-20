@@ -20,6 +20,11 @@ def verify_password(password: str, encoded: str|None) -> bool:
 
 def token_hash(token: str) -> str: return hashlib.sha256(token.encode()).hexdigest()
 
+def revoke_session(token: str) -> None:
+    with get_connection() as conn:
+        conn.execute("UPDATE sessions SET revoked_at=NOW() WHERE token_hash=%s AND revoked_at IS NULL",(token_hash(token),)); conn.commit()
+
+
 def create_session(user_id: str):
     token=secrets.token_urlsafe(48)
     expires=datetime.now(timezone.utc)+timedelta(days=settings.session_days)
