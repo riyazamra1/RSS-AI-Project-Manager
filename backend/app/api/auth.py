@@ -10,7 +10,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from ..core.config import settings
 from ..db import get_connection
-from ..security import create_session, hash_password, require_auth, revoke_session, verify_password
+from ..security import create_session, hash_password, require_auth, revoke_session, user_workspaces, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -102,6 +102,7 @@ def _issue_login(user_id, provider: str, provider_subject: str, provider_email: 
         "expires_at": expires,
         "provider": provider,
         "user": {"id": str(user_id), "email": provider_email, "full_name": full_name},
+        "workspaces": user_workspaces({"id": user_id}),
     }
 
 
