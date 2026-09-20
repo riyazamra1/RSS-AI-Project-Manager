@@ -56,3 +56,23 @@ def service_access(user:dict,workspace_id:str,service_key:str):
 def audit(user,workspace_id,action,resource_type=None,resource_id=None,metadata=None):
     with get_connection() as conn:
         conn.execute("INSERT INTO audit_log(workspace_id,user_id,action,resource_type,resource_id,metadata) VALUES(%s,%s,%s,%s,%s,%s::jsonb)",(workspace_id,user["id"],action,resource_type,resource_id,json.dumps(metadata or {}))); conn.commit()
+
+
+def user_workspaces(user: dict) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT w.id,w.name,wm.role
+               FROM workspace_members wm
+               JOIN workspaces w ON w.id=wm.workspace_id
+               WHERE wm.user_id=%s AND w.status='active'
+               ORDER BY w.created_at,w.name""",
+            (user["id"],),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def require_worker(x_worker_token: str | None = Header(default=None)) -> bool:
+    expected = settings.worker_token
+    if not expected or not x_worker_token or not hmac.compare_digest(x_worker_token, expected):
+        raise HTTPException(401, "Worker authentication required")
+    return True
