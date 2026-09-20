@@ -11,7 +11,7 @@ class RayUnavailable(RuntimeError):
 
 
 class RayClient:
-    """RSS Core control-plane client for queued RAY execution."""
+    """RSS Core control-plane client for queued or direct RAY execution."""
 
     def __init__(self) -> None:
         self.base_url = settings.rss_core_url.rstrip("/")
@@ -38,12 +38,21 @@ class RayClient:
     def submit(self, task_id: str, project: str, task: str, context: str, command: list[str] | None = None) -> str:
         if command is None or not command or not all(isinstance(part, str) and part.strip() for part in command):
             raise RayUnavailable("RAY requires an explicit structured command")
-        result = self._request("POST", "/api/v1/ray/tasks",
-            {"id": task_id, "project": project, "task": task,
-             "context": context, "command": command, "priority": "normal"})
-        if not result.get("queued"):
-            raise RayUnavailable("RSS Core RAY queue is not configured")
-        return str(result["task"]["id"])
+        payload = {"id": task_id, "project": project, "task": task,
+                   "context": context, "command": command, "priority": "normal"}
+
+        result = self._request("POST", "/api/v1/ray/tasks", payload)
+        if result.get("queued") and result.get("task", {}).get("id"):
+            return str(result["task"]["id"])
+
+        # RSS Core may be deployed without a Cloudflare Queue binding. In that
+        # configuration use the authenticated direct-dispatch control-plane route
+        # instead of treating the missing queue as a broken RAY integration.
+        result = self._request("POST", "/api/v1/ray/dispatch", payload)
+        if result.get("dispatched") and result.get("task", {}).get("id"):
+            return str(result["task"]["id"])
+
+        raise RayUnavailable("RSS Core could not queue or directly dispatch the RAY task")
 
     def execute(self, task_id: str, project: str, task: str, context: str, command: list[str] | None = None) -> dict:
         ray_task_id = self.submit(task_id, project, task, context, command)
