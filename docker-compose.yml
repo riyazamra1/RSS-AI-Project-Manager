@@ -1,0 +1,44 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rss-ai-project-manager:latest
+    env_file:
+      - .env
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rss-ai-project-manager:latest
+    env_file:
+      - .env
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rss-ai-project-manager:latest
+    env_file:
+      - .env
+    restart: unless-stopped
+    command: ["python", "-m", "app.scheduler"]
+    depends_on:
+      api:
+        condition: service_healthy
