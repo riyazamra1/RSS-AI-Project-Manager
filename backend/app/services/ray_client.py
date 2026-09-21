@@ -7,7 +7,7 @@ from ..core.config import settings
 
 
 class RayUnavailable(RuntimeError):
-    """RAY is not configured or temporarily unreachable."""
+    """RAY is not configured or temporarily unreachable before task acceptance."""
 
 
 class RayClient:
@@ -46,12 +46,14 @@ class RayClient:
                     raise RayUnavailable("RSS Core returned an unexpected RAY response shape")
                 return decoded
         except urllib.error.HTTPError as exc:
-            # Do not leak response bodies, credentials, or internal upstream details.
+            # Never expose upstream response bodies or credentials in task errors.
             if exc.code in {401, 403}:
-                raise RayUnavailable(f"RSS Core rejected RAY authentication/authorization (HTTP {exc.code})") from exc
-            if exc.code in {404, 408, 409, 425, 429, 500, 502, 503, 504}:
-                raise RayUnavailable(f"RSS Core RAY endpoint unavailable (HTTP {exc.code})") from exc
-            raise RayUnavailable(f"RSS Core RAY request rejected (HTTP {exc.code})") from exc
+                message = f"RSS Core rejected RAY authentication/authorization (HTTP {exc.code})"
+            elif exc.code in {404, 408, 409, 425, 429, 500, 502, 503, 504}:
+                message = f"RSS Core RAY endpoint unavailable (HTTP {exc.code})"
+            else:
+                message = f"RSS Core RAY request rejected (HTTP {exc.code})"
+            raise RayUnavailable(message) from exc
         except (urllib.error.URLError, TimeoutError) as exc:
             raise RayUnavailable(f"RSS Core RAY transport error: {type(exc).__name__}") from exc
 
@@ -65,8 +67,8 @@ class RayClient:
         if result.get("queued") and result.get("task", {}).get("id"):
             return str(result["task"]["id"])
 
-        # RSS Core may be deployed without a Cloudflare Queue binding. In that
-        # configuration use the authenticated direct-dispatch control-plane route.
+        # Fall back to direct dispatch only when the queue endpoint responds
+        # normally but reports that it did not accept the task.
         result = self._request("POST", "/api/v1/ray/dispatch", payload)
         if result.get("dispatched") and result.get("task", {}).get("id"):
             return str(result["task"]["id"])
@@ -74,10 +76,16 @@ class RayClient:
         raise RayUnavailable("RSS Core could not queue or directly dispatch the RAY task")
 
     def execute(self, task_id: str, project: str, task: str, context: str, command: list[str] | None = None) -> dict:
+        # Once submit returns an ID, never raise RayUnavailable: TaskRunner treats
+        # that exception as permission to run Autopilot and could duplicate work.
         ray_task_id = self.submit(task_id, project, task, context, command)
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
-            result = self._request("GET", "/api/v1/ray/tasks/" + ray_task_id)
+            try:
+                result = self._request("GET", "/api/v1/ray/tasks/" + ray_task_id)
+            except RayUnavailable as exc:
+                return {"status": "failed", "ray_task_id": ray_task_id,
+                        "error": f"RAY task accepted; status polling failed: {exc}"}
             status = result.get("status")
             if status == "completed":
                 return {"status": "completed", "ray_task_id": ray_task_id,
@@ -87,4 +95,4 @@ class RayClient:
                         "error": result.get("error") or result.get("stderr", "RAY task failed")}
             time.sleep(self.poll_seconds)
         return {"status": "failed", "ray_task_id": ray_task_id,
-                "error": "RAY task polling timeout"}
+                "error": "RAY task polling timeout; task may still be running"}
