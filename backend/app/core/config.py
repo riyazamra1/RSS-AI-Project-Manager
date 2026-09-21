@@ -9,6 +9,12 @@ class Settings(BaseSettings):
     ray_poll_seconds: int = 5
     ray_poll_timeout_seconds: int = 900
 
+    # Automatic project chat scheduler runs inside the API process. PostgreSQL
+    # row locking makes it safe when multiple API replicas are running.
+    auto_chat_scheduler_enabled: bool = True
+    auto_chat_poll_seconds: int = 30
+    auto_chat_batch_size: int = 10
+
     session_days: int = 30
     oauth_state_minutes: int = 10
     oauth_redirect_base_url: str = ""
