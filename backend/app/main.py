@@ -10,8 +10,21 @@ from app.api.project_discovery import router as project_discovery_router
 from app.api.productivity import router as productivity_router
 from app.api.projects import router as projects_router
 from app.api.tasks import router as tasks_router
+from app.services.project_chat_scheduler import ProjectChatScheduler
+from contextlib import asynccontextmanager
 
-app = FastAPI(title="RSS AI Project Manager", version="0.8.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler = ProjectChatScheduler()
+    await scheduler.start()
+    app.state.project_chat_scheduler = scheduler
+    try:
+        yield
+    finally:
+        await scheduler.stop()
+
+
+app = FastAPI(title="RSS AI Project Manager", version="0.8.0", lifespan=lifespan)
 
 app.include_router(auth_router)
 app.include_router(projects_router, prefix="/api/v1")
