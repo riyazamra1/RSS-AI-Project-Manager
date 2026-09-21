@@ -38,9 +38,22 @@ class RayClient:
                 raw = response.read(settings.max_ray_response_bytes + 1)
                 if len(raw) > settings.max_ray_response_bytes:
                     raise RayUnavailable("RAY response exceeds the configured security limit")
-                return json.loads(raw.decode("utf-8"))
+                try:
+                    decoded = json.loads(raw.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                    raise RayUnavailable("RSS Core returned an invalid RAY JSON response") from exc
+                if not isinstance(decoded, dict):
+                    raise RayUnavailable("RSS Core returned an unexpected RAY response shape")
+                return decoded
+        except urllib.error.HTTPError as exc:
+            # Do not leak response bodies, credentials, or internal upstream details.
+            if exc.code in {401, 403}:
+                raise RayUnavailable(f"RSS Core rejected RAY authentication/authorization (HTTP {exc.code})") from exc
+            if exc.code in {404, 408, 409, 425, 429, 500, 502, 503, 504}:
+                raise RayUnavailable(f"RSS Core RAY endpoint unavailable (HTTP {exc.code})") from exc
+            raise RayUnavailable(f"RSS Core RAY request rejected (HTTP {exc.code})") from exc
         except (urllib.error.URLError, TimeoutError) as exc:
-            raise RayUnavailable(str(exc)) from exc
+            raise RayUnavailable(f"RSS Core RAY transport error: {type(exc).__name__}") from exc
 
     def submit(self, task_id: str, project: str, task: str, context: str, command: list[str] | None = None) -> str:
         if command is None or not command or not all(isinstance(part, str) and part.strip() for part in command):
@@ -53,8 +66,7 @@ class RayClient:
             return str(result["task"]["id"])
 
         # RSS Core may be deployed without a Cloudflare Queue binding. In that
-        # configuration use the authenticated direct-dispatch control-plane route
-        # instead of treating the missing queue as a broken RAY integration.
+        # configuration use the authenticated direct-dispatch control-plane route.
         result = self._request("POST", "/api/v1/ray/dispatch", payload)
         if result.get("dispatched") and result.get("task", {}).get("id"):
             return str(result["task"]["id"])
