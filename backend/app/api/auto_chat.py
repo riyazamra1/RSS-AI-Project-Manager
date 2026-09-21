@@ -24,10 +24,10 @@ def set_schedule(project_id: str, item: AutoChatUpdate, ctx=Depends(require_work
     with get_connection() as conn:
         if conn.execute("SELECT 1 FROM projects WHERE id=%s AND workspace_id=%s", (project_id,ctx["workspace_id"])).fetchone() is None: raise HTTPException(404, "Project not found")
         row = conn.execute("""INSERT INTO project_chat_schedules(workspace_id,project_id,interval_minutes,enabled,next_run_at,created_by)
-            VALUES(%s,%s,%s,%s,NOW() + (%s || ' minutes')::interval,%s)
+            VALUES(%s,%s,%s,%s,CASE WHEN %s THEN NOW() + (%s || ' minutes')::interval ELSE NULL END,%s)
             ON CONFLICT(workspace_id,project_id) DO UPDATE SET interval_minutes=EXCLUDED.interval_minutes,enabled=EXCLUDED.enabled,
               next_run_at=CASE WHEN EXCLUDED.enabled THEN NOW() + (EXCLUDED.interval_minutes || ' minutes')::interval ELSE NULL END,updated_at=NOW()
-            RETURNING id,project_id,interval_minutes,enabled,next_run_at,last_run_at,created_at,updated_at""", (ctx["workspace_id"],project_id,item.interval_minutes,item.enabled,item.interval_minutes,ctx["user"]["id"])).fetchone()
+            RETURNING id,project_id,interval_minutes,enabled,next_run_at,last_run_at,created_at,updated_at""", (ctx["workspace_id"],project_id,item.interval_minutes,item.enabled,item.enabled,item.interval_minutes,ctx["user"]["id"])).fetchone()
         conn.commit()
     audit(ctx["user"],ctx["workspace_id"],"project.auto_chat.update","project",project_id,{"interval_minutes":item.interval_minutes,"enabled":item.enabled})
     return dict(row)
