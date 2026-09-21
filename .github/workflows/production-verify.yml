@@ -46,6 +46,7 @@ jobs:
           sudo rsync -a --delete backend/ /opt/rss-ai-project-manager/backend/
           sudo rsync -a config/ /opt/rss-ai-project-manager/config/
           sudo rsync -a database/ /opt/rss-ai-project-manager/database/
+          sudo install -m 0644 deploy/rss-ai-project-manager-api.service /etc/systemd/system/rss-ai-project-manager-api.service
           sudo install -m 0644 deploy/rss-ai-project-manager-scheduler.service /etc/systemd/system/rss-ai-project-manager-scheduler.service
           sudo install -m 0644 deploy/rss-ai-project-manager-worker.service /etc/systemd/system/rss-ai-project-manager-worker.service
           sudo systemctl daemon-reload
@@ -53,19 +54,24 @@ jobs:
       - name: Restart production services
         run: |
           set -euo pipefail
+          sudo systemctl enable --now rss-ai-project-manager-api.service
           sudo systemctl enable --now rss-ai-project-manager-scheduler.service
           sudo systemctl enable --now rss-ai-project-manager-worker.service
+          sudo systemctl restart rss-ai-project-manager-api.service
           sudo systemctl restart rss-ai-project-manager-scheduler.service
           sudo systemctl restart rss-ai-project-manager-worker.service
+          sudo systemctl --no-pager --full status rss-ai-project-manager-api.service
           sudo systemctl --no-pager --full status rss-ai-project-manager-scheduler.service
           sudo systemctl --no-pager --full status rss-ai-project-manager-worker.service
 
       - name: Verify scheduler process
         run: |
           set -euo pipefail
+          systemctl is-active --quiet rss-ai-project-manager-api.service
           systemctl is-active --quiet rss-ai-project-manager-scheduler.service
           systemctl is-active --quiet rss-ai-project-manager-worker.service
-          pgrep -af 'app.scheduler|app.worker'
+          curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8000/health
+          pgrep -af 'uvicorn|app.scheduler|app.worker'
 
       - name: Verify RSS Core production
         env:
