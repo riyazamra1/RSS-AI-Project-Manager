@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.api.ai import router as ai_router
+from app.api.auto_chat import router as auto_chat_router
 from app.api.auth import router as auth_router
 from app.api.autopilot import router as autopilot_router
 from app.api.conversations import router as conversations_router
@@ -19,6 +20,7 @@ app.include_router(productivity_router, prefix="/api/v1")
 app.include_router(memory_router, prefix="/api/v1")
 app.include_router(conversations_router, prefix="/api/v1")
 app.include_router(ai_router, prefix="/api/v1")
+app.include_router(auto_chat_router, prefix="/api/v1")
 app.include_router(autopilot_router, prefix="/api/v1")
 app.include_router(tasks_router, prefix="/api/v1")
 
