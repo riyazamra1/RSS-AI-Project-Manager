@@ -1,0 +1,47 @@
+name: Docker Build Verify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "backend/**"
+      - ".github/workflows/docker-verify.yml"
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "backend/**"
+      - ".github/workflows/docker-verify.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t rss-ai-project-manager:test .
+
+      - name: Start API container
+        run: |
+          docker run -d --name rss-pm-api -p 18000:8000             -e DATABASE_URL=postgresql://rss_manager:rss_manager@127.0.0.1:5432/rss_project_manager             -e RAY_EXECUTE_TASKS=false             rss-ai-project-manager:test
+
+      - name: Verify API health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18000/health; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs rss-pm-api
+          exit 1
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f rss-pm-api || true
