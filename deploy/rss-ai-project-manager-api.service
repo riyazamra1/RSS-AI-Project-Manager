@@ -1,0 +1,16 @@
+[Unit]
+Description=RSS AI Project Manager API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/rss-ai-project-manager/backend
+EnvironmentFile=/opt/rss-ai-project-manager/backend/.env
+Environment=PYTHONPATH=/opt/rss-ai-project-manager/backend
+ExecStart=/opt/rss-ai-project-manager/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
