@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     auto_chat_scheduler_enabled: bool = True
     auto_chat_poll_seconds: int = 30
     auto_chat_batch_size: int = 10
+    auto_chat_retry_seconds: int = 60
 
     session_days: int = 30
     oauth_state_minutes: int = 10
