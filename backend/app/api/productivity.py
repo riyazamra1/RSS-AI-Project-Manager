@@ -203,3 +203,72 @@ def list_dependencies(task_id: int, ctx=Depends(current_workspace)) -> list[dict
             raise HTTPException(404, "Task not found")
         rows=conn.execute("SELECT td.task_id,td.depends_on_task_id,td.created_at,t.title,t.status FROM task_dependencies td JOIN tasks t ON t.id=td.depends_on_task_id WHERE td.task_id=%s AND t.workspace_id=%s ORDER BY td.created_at", (task_id,workspace_id)).fetchall()
     return [dict(row) for row in rows]
+
+
+
+@router.get("/dashboard")
+def dashboard_metrics(ctx=Depends(current_workspace)) -> dict:
+    _, workspace_id = ctx
+    with get_connection() as conn:
+        projects = conn.execute(
+            """SELECT
+                 COUNT(*)::int AS total,
+                 COUNT(*) FILTER (WHERE archived=false)::int AS active,
+                 COUNT(*) FILTER (WHERE status='completed')::int AS completed
+               FROM projects WHERE workspace_id=%s""",
+            (workspace_id,),
+        ).fetchone()
+        tasks = conn.execute(
+            """SELECT
+                 COUNT(*)::int AS total,
+                 COUNT(*) FILTER (WHERE status='pending')::int AS pending,
+                 COUNT(*) FILTER (WHERE status='running')::int AS running,
+                 COUNT(*) FILTER (WHERE status='completed')::int AS completed,
+                 COUNT(*) FILTER (WHERE status='failed')::int AS failed,
+                 COUNT(*) FILTER (WHERE blocked=true AND status NOT IN ('completed','failed'))::int AS blocked,
+                 COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status NOT IN ('completed','failed'))::int AS overdue
+               FROM tasks WHERE workspace_id=%s""",
+            (workspace_id,),
+        ).fetchone()
+        milestones = conn.execute(
+            """SELECT
+                 COUNT(*)::int AS total,
+                 COUNT(*) FILTER (WHERE status='completed')::int AS completed,
+                 COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status <> 'completed')::int AS overdue
+               FROM milestones WHERE workspace_id=%s""",
+            (workspace_id,),
+        ).fetchone()
+        activity = conn.execute(
+            """SELECT event_type,summary,created_at
+               FROM activity_log WHERE workspace_id=%s
+               ORDER BY created_at DESC LIMIT 10""",
+            (workspace_id,),
+        ).fetchall()
+    return {
+        "projects": dict(projects),
+        "tasks": dict(tasks),
+        "milestones": dict(milestones),
+        "recent_activity": [dict(row) for row in activity],
+    }
+
+
+@router.get("/calendar/tasks")
+def calendar_tasks(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    ctx=Depends(current_workspace),
+) -> list[dict]:
+    _, workspace_id = ctx
+    with get_connection() as conn:
+        query = """SELECT id,project_id,title,status,priority,assignee_user_id,due_date,
+                          started_at,completed_at,estimate_minutes,position,blocked,milestone_id
+                   FROM tasks WHERE workspace_id=%s"""
+        args: list = [workspace_id]
+        if start_date:
+            query += " AND COALESCE(due_date, started_at::date) >= %s"
+            args.append(start_date)
+        if end_date:
+            query += " AND COALESCE(due_date, started_at::date) <= %s"
+            args.append(end_date)
+        rows = conn.execute(query + " ORDER BY COALESCE(due_date, started_at::date), position NULLS LAST, id", tuple(args)).fetchall()
+    return [dict(row) for row in rows]
