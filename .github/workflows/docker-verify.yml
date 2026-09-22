@@ -28,7 +28,9 @@ jobs:
 
       - name: Start API container
         run: |
-          docker run -d --name rss-pm-api -p 18000:8000             -e DATABASE_URL=postgresql://rss_manager:rss_manager@127.0.0.1:5432/rss_project_manager             -e RAY_EXECUTE_TASKS=false             rss-ai-project-manager:test
+          docker run -d --name rss-pm-api -p 18000:8000 \
+            -e RAY_EXECUTE_TASKS=false \
+            rss-ai-project-manager:test
 
       - name: Verify API health
         run: |
