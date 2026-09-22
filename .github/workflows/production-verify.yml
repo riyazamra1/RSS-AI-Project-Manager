@@ -1,130 +1,26 @@
-name: RSS AI Project Manager Production Verify
+name: RSS Core RAY Production Verify
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'backend/**'
-      - 'config/**'
-      - 'database/**'
-      - '.github/workflows/production-verify.yml'
-      - 'deploy/**'
-  workflow_dispatch:
-
-concurrency:
-  group: rss-ai-project-manager-production
-  cancel-in-progress: false
+      - "scripts/production_verify.py"
+      - "scripts/verify-production.sh"
+      - ".github/workflows/production-verify.yml"
 
 jobs:
-  verify:
-    name: Production deployment, scheduler and RAY E2E
-    runs-on: [self-hosted, rss, ubuntu, ai]
-    timeout-minutes: 20
+  production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify required production configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f /opt/rss-ai-project-manager/backend/.env
-          grep -q '^RSS_CORE_URL=https://rsscore.cv' /opt/rss-ai-project-manager/backend/.env
-          grep -q '^RSS_CORE_API_TOKEN=' /opt/rss-ai-project-manager/backend/.env
-          grep -q '^RAY_EXECUTE_TASKS=true' /opt/rss-ai-project-manager/backend/.env
-
-      - name: Install/update backend dependencies
-        run: |
-          set -euo pipefail
-          python3 -m venv /opt/rss-ai-project-manager/.venv
-          /opt/rss-ai-project-manager/.venv/bin/pip install --upgrade pip
-          /opt/rss-ai-project-manager/.venv/bin/pip install -r backend/requirements.txt
-
-      - name: Sync application
-        run: |
-          set -euo pipefail
-          sudo rsync -a --delete backend/ /opt/rss-ai-project-manager/backend/
-          sudo rsync -a config/ /opt/rss-ai-project-manager/config/
-          sudo rsync -a database/ /opt/rss-ai-project-manager/database/
-          sudo install -m 0644 deploy/rss-ai-project-manager-api.service /etc/systemd/system/rss-ai-project-manager-api.service
-          sudo install -m 0644 deploy/rss-ai-project-manager-scheduler.service /etc/systemd/system/rss-ai-project-manager-scheduler.service
-          sudo install -m 0644 deploy/rss-ai-project-manager-worker.service /etc/systemd/system/rss-ai-project-manager-worker.service
-          sudo systemctl daemon-reload
-
-      - name: Restart production services
-        run: |
-          set -euo pipefail
-          sudo systemctl enable --now rss-ai-project-manager-api.service
-          sudo systemctl enable --now rss-ai-project-manager-scheduler.service
-          sudo systemctl enable --now rss-ai-project-manager-worker.service
-          sudo systemctl restart rss-ai-project-manager-api.service
-          sudo systemctl restart rss-ai-project-manager-scheduler.service
-          sudo systemctl restart rss-ai-project-manager-worker.service
-          sudo systemctl --no-pager --full status rss-ai-project-manager-api.service
-          sudo systemctl --no-pager --full status rss-ai-project-manager-scheduler.service
-          sudo systemctl --no-pager --full status rss-ai-project-manager-worker.service
-
-      - name: Verify scheduler process
-        run: |
-          set -euo pipefail
-          systemctl is-active --quiet rss-ai-project-manager-api.service
-          systemctl is-active --quiet rss-ai-project-manager-scheduler.service
-          systemctl is-active --quiet rss-ai-project-manager-worker.service
-          curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8000/health
-          pgrep -af 'uvicorn|app.scheduler|app.worker'
-
-      - name: Verify RSS Core production
+      - name: Verify RSS Core -> RAY
         env:
+          RSS_CORE_URL: ${{ secrets.RSS_CORE_URL }}
           RSS_CORE_API_TOKEN: ${{ secrets.RSS_CORE_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          test -n "$RSS_CORE_API_TOKEN"
-          health="$(curl --fail --silent --show-error --retry 5 --retry-delay 2 --connect-timeout 10 --max-time 30 https://rsscore.cv/health)"
-          echo "$health"
-          echo "$health" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("ok") is True and d.get("service")=="rss-core", d'
-
-      - name: Verify RAY worker health through RSS Core
-        env:
-          RSS_CORE_API_TOKEN: ${{ secrets.RSS_CORE_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          health="$(curl --fail --silent --show-error --retry 5 --retry-delay 2 --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $RSS_CORE_API_TOKEN" https://rsscore.cv/health)"
-          echo "$health"
-          echo "$health" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("ray",{}).get("configured") is True, d; assert d.get("ray",{}).get("healthy") is True, d'
-
-      - name: Verify RAY production round trip
-        env:
-          RSS_CORE_API_TOKEN: ${{ secrets.RSS_CORE_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          id="pm-prod-smoke-$(date +%s)"
-          payload="$(python3 - "$id" <<'PY'
-          import json,sys
-          print(json.dumps({
-            "id":sys.argv[1],
-            "project":"RSS-AI-Project-Manager",
-            "task":"Production RAY smoke test",
-            "context":"Health verification only. Do not modify repositories.",
-            "command":["/bin/echo","RSS_RAY_PRODUCTION_OK"],
-            "priority":"low"
-          }))
-          PY
-          )"
-          submit="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $RSS_CORE_API_TOKEN" -H 'content-type: application/json' -d "$payload" https://rsscore.cv/api/v1/ray/dispatch)"
-          echo "$submit"
-          echo "$submit" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("dispatched") is True, d; assert d.get("task",{}).get("id"), d'
-          task_id="$(echo "$submit" | python3 -c 'import json,sys; print(json.load(sys.stdin)["task"]["id"])')"
-          deadline=$(( $(date +%s) + 120 ))
-          while [ "$(date +%s)" -lt "$deadline" ]; do
-            result="$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $RSS_CORE_API_TOKEN" "https://rsscore.cv/api/v1/ray/tasks/$task_id")"
-            echo "$result"
-            status="$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')"
-            if [ "$status" = completed ]; then
-              echo "$result" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "RSS_RAY_PRODUCTION_OK" in (d.get("stdout") or ""), d'
-              exit 0
-            fi
-            if [ "$status" = failed ]; then exit 1; fi
-            sleep 5
-          done
-          echo "RAY production round trip timed out"
-          exit 1
+          RAY_WORKER_URL: ${{ secrets.RAY_WORKER_URL }}
+          RAY_WORKER_TOKEN: ${{ secrets.RAY_WORKER_TOKEN }}
+        run: python3 scripts/production_verify.py
