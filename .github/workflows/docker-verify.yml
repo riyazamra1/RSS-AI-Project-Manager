@@ -8,43 +8,81 @@ on:
       - "Dockerfile"
       - "docker-compose.yml"
       - "backend/**"
+      - ".dockerignore"
       - ".github/workflows/docker-verify.yml"
   pull_request:
     paths:
       - "Dockerfile"
       - "docker-compose.yml"
       - "backend/**"
+      - ".dockerignore"
       - ".github/workflows/docker-verify.yml"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-verify-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+  build-and-healthcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build image
-        run: docker build -t rss-ai-project-manager:test .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: rss-ai-project-manager:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
 
       - name: Start API container
         run: |
-          docker run -d --name rss-pm-api -p 18000:8000 \
+          docker run -d --name rss-pm-api \
+            -p 127.0.0.1:18000:8000 \
             -e RAY_EXECUTE_TASKS=false \
-            rss-ai-project-manager:test
+            -e AUTO_CHAT_ENABLED=false \
+            rss-ai-project-manager:ci
 
       - name: Verify API health
+        shell: bash
         run: |
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:18000/health; then
+          set -euo pipefail
+          for i in $(seq 1 45); do
+            if curl --fail --silent --show-error http://127.0.0.1:18000/health; then
               echo
               exit 0
             fi
+            if [[ "$(docker inspect -f '{{.State.Running}}' rss-pm-api 2>/dev/null || true)" != "true" ]]; then
+              echo "API container exited before becoming healthy"
+              docker logs rss-pm-api || true
+              exit 1
+            fi
             sleep 2
           done
-          docker logs rss-pm-api
+          echo "API health endpoint did not respond within 90 seconds"
           exit 1
+
+      - name: Collect diagnostics
+        if: failure()
+        run: |
+          echo '--- Docker containers ---'
+          docker ps -a || true
+          echo '--- API container logs ---'
+          docker logs rss-pm-api 2>&1 || true
+          echo '--- API container state ---'
+          docker inspect rss-pm-api || true
 
       - name: Cleanup
         if: always()
-        run: docker rm -f rss-pm-api || true
+        run: docker rm -f rss-pm-api 2>/dev/null || true
