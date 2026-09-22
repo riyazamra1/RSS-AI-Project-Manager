@@ -51,7 +51,7 @@ jobs:
           docker run -d --name rss-pm-api \
             -p 127.0.0.1:18000:8000 \
             -e RAY_EXECUTE_TASKS=false \
-            -e AUTO_CHAT_ENABLED=false \
+            -e AUTO_CHAT_SCHEDULER_ENABLED=false \
             rss-ai-project-manager:ci
 
       - name: Verify API health
