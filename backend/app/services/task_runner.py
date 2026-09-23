@@ -4,7 +4,6 @@ import os
 import urllib.request
 
 from ..db import get_connection
-from .autopilot import Autopilot
 from .ray_client import RayClient, RayUnavailable
 from ..core.config import settings
 
@@ -12,8 +11,7 @@ from ..core.config import settings
 class TaskRunner:
     """Execute central AI tasks with persistent RSS project and GitHub context."""
 
-    def __init__(self, autopilot: Autopilot | None = None) -> None:
-        self.autopilot = autopilot or Autopilot()
+    def __init__(self) -> None:
         self.github_token = os.getenv("RSS_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
         self.ray = RayClient()
 
@@ -47,10 +45,9 @@ class TaskRunner:
                     self._finish(task["id"],task["workspace_id"],task["project_id"],"completed",result.get("output",""),"ray",{"ray_task_id":result["ray_task_id"],"operation":task["operation"],"arguments":task["arguments"] or {}})
                     return {"status":"completed","task_id":task["id"],"provider":"ray","output":result.get("output",""),"ray_task_id":result["ray_task_id"]}
                 raise RuntimeError(result.get("error","RAY task failed"))
-            except RayUnavailable:
-                result=self.autopilot.execute(task["title"],context)
-                self._finish(task["id"],task["workspace_id"],task["project_id"],"completed",result.output,result.provider)
-                return {"status":"completed","task_id":task["id"],"provider":result.provider,"model":result.model,"output":result.output,"execution_path":"internal-autopilot-fallback"}
+            except RayUnavailable as exc:
+                self._finish(task["id"],task["workspace_id"],task["project_id"],"blocked",str(exc),"ray")
+                return {"status":"blocked","task_id":task["id"],"provider":"ray","error":str(exc),"execution_path":"rss-core-cloudflare-ray"}
         except Exception as exc:
             self._finish(task["id"],task["workspace_id"],task["project_id"],"failed",str(exc))
             return {"status":"failed","task_id":task["id"],"error":str(exc)}
