@@ -1,6 +1,10 @@
 name: RSS AI Project Manager CI
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -33,6 +37,9 @@ jobs:
         env:
           PYTHONPATH: .
         run: python -c "from app.main import app; assert app.title == 'RSS AI Project Manager'"
+
+      - name: Compile execution services
+        run: python -m py_compile app/services/task_runner.py app/services/ray_client.py
 
       - name: Health endpoint smoke test
         env:
