@@ -28,7 +28,13 @@ class TaskRunner:
                 except json.JSONDecodeError: command=None
             enabled=os.getenv("RSS_RAY_EXECUTE_TASKS","").lower() in {"1","true","yes"}
             if not settings.ray_execute_tasks or not enabled: return self._block(task,"RAY execution is not enabled for this deployment")
-            if not command: return self._block(task,"RAY requires an explicit structured command")
+            if not command:
+                command = self._default_execution_command(
+                    str(task["project_id"] or ""),
+                    str(task["title"] or ""),
+                )
+                if not command:
+                    return self._block(task,"RAY execution command is not configured")
             self._state(task,"running","Task accepted for RSS Core/RAY execution")
             result=self.ray.execute(str(task["id"]),self._project_repository(task["workspace_id"],task["project_id"]),task["title"],context,command)
             if result["status"]=="completed":
@@ -36,6 +42,24 @@ class TaskRunner:
             return self._fail_or_retry(task,result.get("error","RAY task failed"),result.get("ray_task_id"))
         except RayUnavailable as exc: return self._block(task,str(exc))
         except Exception as exc: return self._fail_or_retry(task,str(exc),None)
+
+    def _default_execution_command(self, project_id: str, title: str) -> list[str] | None:
+        # RAY is the only runtime control path. If the PM task has no explicit
+        # command, bootstrap the internal executor inside the RAY worker. The
+        # worker supplies RSS_AUTOPILOT_GITHUB_TOKEN (and AI/OpenHands secrets)
+        # through its own secret environment; no credential is sent in payloads.
+        executor = os.getenv(
+            "RSS_RAY_EXECUTOR_COMMAND",
+            "gh repo clone riyazamra1/RSS-AI-Project-Manager /tmp/rss-pm -- --depth=1 && "
+            "bash /tmp/rss-pm/scripts/ray-autonomous-executor.sh",
+        ).strip()
+        if not executor:
+            return None
+        return [
+            "bash", "-lc",
+            executor + " "$1" "$2" "$3"",
+            "--", project_id, title, json.dumps({"workspace_id": str(project_id)}),
+        ]
 
     def _set_state(self,conn,task,status,summary,provider):
         conn.execute("UPDATE tasks SET status=%s,provider=%s,updated_at=NOW() WHERE id=%s AND workspace_id=%s",(status,provider,task["id"],task["workspace_id"]))
