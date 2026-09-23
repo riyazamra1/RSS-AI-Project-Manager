@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     github_oauth_client_id: str = ""
     github_oauth_client_secret: str = ""
     worker_token: str = ""
-    ray_execute_tasks: bool = False
+    ray_execute_tasks: bool = True
     require_https_integrations: bool = True
     max_ray_payload_bytes: int = 262144
     max_ray_response_bytes: int = 1048576
