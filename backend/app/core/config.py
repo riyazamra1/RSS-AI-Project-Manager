@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     ray_poll_seconds: int = 5
     ray_poll_timeout_seconds: int = 900
 
-    # Automatic project chat scheduler runs inside the API process. PostgreSQL
-    # row locking makes it safe when multiple API replicas are running.
+    # The PM database is the durable control-plane state. Runtime execution is
+    # delegated to RSS Core/RAY; GitHub Actions is never a scheduler dependency.
     auto_chat_scheduler_enabled: bool = True
     auto_chat_poll_seconds: int = 30
     auto_chat_batch_size: int = 10
@@ -25,15 +25,15 @@ class Settings(BaseSettings):
     github_oauth_client_secret: str = ""
     worker_token: str = ""
 
-    # Remote execution is fail-closed. Production must explicitly enable RAY
-    # only after tenant/service authorization has been configured.
+    # Fail closed: no local AI/autopilot fallback. RAY must be explicitly enabled.
     ray_execute_tasks: bool = False
     require_https_integrations: bool = True
     max_ray_payload_bytes: int = 262144
     max_ray_response_bytes: int = 1048576
 
-    # Comma-separated GitHub repositories allowed for AI context. Customer
-    # repositories must be explicitly added at deployment time.
+    # GitHub is source-control/context only. Discovery is opt-in so GitHub API
+    # limits cannot stop the PM execution loop.
+    github_discovery_enabled: bool = False
     github_allowed_repositories: str = "riyazamra1/RSS-AI-Project-Manager"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
