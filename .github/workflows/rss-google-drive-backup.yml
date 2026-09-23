@@ -1,7 +1,5 @@
 name: RSS Google Drive Backup
 on:
-  push:
-    branches: ["**"]
   workflow_dispatch:
 permissions:
   contents: read
