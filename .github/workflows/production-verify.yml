@@ -2,12 +2,6 @@ name: RSS Core RAY Production Verify
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/production_verify.py"
-      - "scripts/verify-production.sh"
-      - ".github/workflows/production-verify.yml"
 
 jobs:
   production:
