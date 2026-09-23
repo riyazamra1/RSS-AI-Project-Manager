@@ -2,6 +2,7 @@
 set -euo pipefail
 REPOSITORY="${1:?repository required}"
 TASK="${2:?task required}"
+CONTEXT="${3:-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECTS="$ROOT/config/projects.json"
 CONTRACT="$ROOT/GEMINI.md"
@@ -28,10 +29,20 @@ Task: $TASK
 Authoritative worker contract:
 $(cat "$CONTRACT")
 
-Do not commit or push from the worker. Preserve useful existing changes and run relevant checks.
+Additional task context:\n$CONTEXT\n\nDo not commit or push from the worker. Preserve useful existing changes and run relevant checks.
 EOF
 mkdir -p "$WORKDIR/agent"
-bash "$ROUTER" "$WORKDIR/task.txt" "$WORKDIR/agent"
+if command -v openhands >/dev/null 2>&1; then
+  OPENHANDS_SUPPRESS_BANNER=1 openhands --headless --json --override-with-envs --exit-without-confirmation -t "$(cat "$WORKDIR/task.txt")" | tee "$WORKDIR/agent/openhands.jsonl"
+elif [[ "${RSS_OPENHANDS_DOCKER_ENABLED:-false}" == "true" ]] && command -v docker >/dev/null 2>&1; then
+  IMAGE="${RSS_OPENHANDS_DOCKER_IMAGE:-docker.openhands.dev/openhands/openhands:1.8}"
+  docker run --rm --pull=missing \
+    -e LLM_API_KEY -e LLM_MODEL -e LLM_BASE_URL \
+    -v "$PWD:/workspace" -w /workspace \
+    "$IMAGE" openhands --headless --json --override-with-envs --exit-without-confirmation -t "$(cat "$WORKDIR/task.txt")" | tee "$WORKDIR/agent/openhands.jsonl"
+else
+  bash "$ROUTER" "$WORKDIR/task.txt" "$WORKDIR/agent"
+fi
 if [[ -x ./gradlew ]]; then ./gradlew assembleDebug --stacktrace; elif [[ -f package.json ]]; then npm test --if-present; npm run build --if-present; elif [[ -f Makefile ]]; then make; else echo 'No supported build system detected.'; exit 2; fi
 if git status --porcelain | grep -E '(^|/)(\.env|.*\.jks|.*\.keystore|.*\.p12|.*\.pem)$' >/dev/null; then echo 'BLOCKED: credential/signing file detected'; exit 30; fi
 git add -A
