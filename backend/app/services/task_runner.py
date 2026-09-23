@@ -57,7 +57,7 @@ class TaskRunner:
             return None
         return [
             "bash", "-lc",
-            executor + " \\"$1\\" \\"$2\\" \\"$3\\"",
+            executor + ' "$1" "$2" "$3"',
             "--", project_id, title, json.dumps({"workspace_id": str(project_id)}),
         ]
 
