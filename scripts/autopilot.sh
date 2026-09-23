@@ -29,7 +29,10 @@ Task: $TASK
 Authoritative worker contract:
 $(cat "$CONTRACT")
 
-Additional task context:\n$CONTEXT\n\nDo not commit or push from the worker. Preserve useful existing changes and run relevant checks.
+Additional task context:
+$CONTEXT
+
+Do not commit or push from the worker. Preserve useful existing changes and run relevant checks.
 EOF
 mkdir -p "$WORKDIR/agent"
 if command -v openhands >/dev/null 2>&1; then
