@@ -86,3 +86,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker rm -f rss-pm-api 2>/dev/null || true
+
+# CI verification workflow is intentionally triggered on changes to this workflow.
