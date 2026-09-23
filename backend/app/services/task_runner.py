@@ -43,22 +43,17 @@ class TaskRunner:
         except RayUnavailable as exc: return self._block(task,str(exc))
         except Exception as exc: return self._fail_or_retry(task,str(exc),None)
 
-    def _default_execution_command(self, project_id: str, title: str) -> list[str] | None:
-        # RAY is the only runtime control path. If the PM task has no explicit
-        # command, bootstrap the internal executor inside the RAY worker. The
-        # worker supplies RSS_AUTOPILOT_GITHUB_TOKEN (and AI/OpenHands secrets)
-        # through its own secret environment; no credential is sent in payloads.
-        executor = os.getenv(
-            "RSS_RAY_EXECUTOR_COMMAND",
-            "gh repo clone riyazamra1/RSS-AI-Project-Manager /tmp/rss-pm -- --depth=1 && "
-            "bash /tmp/rss-pm/scripts/ray-autonomous-executor.sh",
-        ).strip()
-        if not executor:
+    def _default_execution_command(self, project_id: str, title: str, context: str) -> list[str] | None:
+        if not project_id or not title:
             return None
+        # RSS Core/RAY is the sole execution path. The RAY worker exposes a
+        # dedicated non-shell executable for the PM engine; no shell syntax or
+        # credentials are sent in the task payload.
         return [
-            "bash", "-lc",
-            executor + ' "$1" "$2" "$3"',
-            "--", project_id, title, json.dumps({"workspace_id": str(project_id)}),
+            "rss-project-manager-executor",
+            "riyazamra1/RSS-AI-Project-Manager",
+            title,
+            context,
         ]
 
     def _set_state(self,conn,task,status,summary,provider):
