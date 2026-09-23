@@ -26,7 +26,7 @@ class TaskRunner:
             if isinstance(command,str):
                 try: command=json.loads(command)
                 except json.JSONDecodeError: command=None
-            enabled=os.getenv("RSS_RAY_EXECUTE_TASKS","").lower() in {"1","true","yes"}
+            enabled=os.getenv("RSS_RAY_EXECUTE_TASKS","true").lower() in {"1","true","yes"}
             if not settings.ray_execute_tasks or not enabled: return self._block(task,"RAY execution is not enabled for this deployment")
             if not command:
                 command = self._default_execution_command(
