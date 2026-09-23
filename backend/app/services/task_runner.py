@@ -28,30 +28,32 @@ class TaskRunner:
                 except json.JSONDecodeError: command=None
             enabled=os.getenv("RSS_RAY_EXECUTE_TASKS","true").lower() in {"1","true","yes"}
             if not settings.ray_execute_tasks or not enabled: return self._block(task,"RAY execution is not enabled for this deployment")
+            repository = self._project_repository(task["workspace_id"],task["project_id"])
             if not command:
                 command = self._default_execution_command(
-                    str(task["project_id"] or ""),
+                    repository,
                     str(task["title"] or ""),
+                    context,
                 )
                 if not command:
                     return self._block(task,"RAY execution command is not configured")
             self._state(task,"running","Task accepted for RSS Core/RAY execution")
-            result=self.ray.execute(str(task["id"]),self._project_repository(task["workspace_id"],task["project_id"]),task["title"],context,command)
+            result=self.ray.execute(str(task["id"]),repository,task["title"],context,command)
             if result["status"]=="completed":
                 self._finish(task,"completed",result.get("output",""),"ray",{"ray_task_id":result["ray_task_id"]}); return {"status":"completed","task_id":task["id"],"provider":"ray","ray_task_id":result["ray_task_id"]}
             return self._fail_or_retry(task,result.get("error","RAY task failed"),result.get("ray_task_id"))
         except RayUnavailable as exc: return self._block(task,str(exc))
         except Exception as exc: return self._fail_or_retry(task,str(exc),None)
 
-    def _default_execution_command(self, project_id: str, title: str, context: str) -> list[str] | None:
-        if not project_id or not title:
+    def _default_execution_command(self, repository: str, title: str, context: str) -> list[str] | None:
+        if not repository or "/" not in repository or not title:
             return None
         # RSS Core/RAY is the sole execution path. The RAY worker exposes a
         # dedicated non-shell executable for the PM engine; no shell syntax or
         # credentials are sent in the task payload.
         return [
             "rss-project-manager-executor",
-            "riyazamra1/RSS-AI-Project-Manager",
+            repository,
             title,
             context,
         ]
