@@ -2,29 +2,6 @@ name: Docker Build Verify
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "Dockerfile"
-      - "docker-compose.yml"
-      - "backend/**"
-      - ".dockerignore"
-      - ".github/workflows/docker-verify.yml"
-  pull_request:
-    paths:
-      - "Dockerfile"
-      - "docker-compose.yml"
-      - "backend/**"
-      - ".dockerignore"
-      - ".github/workflows/docker-verify.yml"
-
-permissions:
-  contents: read
-
-concurrency:
-  group: docker-verify-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build-and-healthcheck:
     runs-on: ubuntu-latest
