@@ -67,7 +67,7 @@ def main() -> int:
         "project": "RSS-AI-Project-Manager",
         "task": "Production connectivity smoke test",
         "context": "Non-destructive production verification. Return the exact marker only.",
-        "command": ["/bin/echo", "RSS_RAY_PRODUCTION_OK"],
+        "command": ["printf", "RSS_RAY_PRODUCTION_OK"],
         "priority": "normal",
     }
 
