@@ -96,7 +96,10 @@ class TaskRunner:
     def _project_repository(self,workspace_id,project_id):
         if not project_id: return "RSS-AI-Project-Manager"
         with get_connection() as conn: row=conn.execute("SELECT repository FROM projects WHERE id=%s AND workspace_id=%s",(project_id,workspace_id)).fetchone()
-        return row["repository"] if row and row["repository"] else "riyazamra1/RSS-AI-Project-Manager"
+        repository = row["repository"] if row and row["repository"] else "riyazamra1/RSS-AI-Project-Manager"
+        if "/" not in repository:
+            repository = "riyazamra1/" + repository
+        return repository
     def _github_context(self,repository):
         allowed={item.strip().lower() for item in settings.github_allowed_repositories.split(",") if item.strip()}
         if repository.lower() not in allowed: return "GITHUB_CONTEXT_BLOCKED: repository is not on the server-side allowlist"
