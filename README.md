@@ -4,15 +4,16 @@ Central AI-powered project management and development control system for Razeen 
 
 ## Unified system
 
-**RSS AI Project Manager is the single source of truth for project management and autonomous development.** The former RSS Autopilot is now an internal execution engine, not a separate application or repository.
+**RSS AI Project Manager is the single source of truth for project management and autonomous development.**
+
+The execution model is **RSS Core + RAY + Cloudflare/worker orchestration**. The former RSS Autopilot is obsolete for this project and is **not an execution engine, fallback, or separate application**.
 
 ### Internal modules
 - Project Management — projects, requirements, tasks, decisions, status and activity history
-- Autopilot Engine — AI-assisted implementation, build/test verification and GitHub PR automation
-- RAY Queue — task execution and worker orchestration layer
-- RSS Core — shared storage, memory and communication layer
-- AI Workers — Gemini, OpenAI/Codex-compatible agents and future providers
-- GitHub Automation — repository health, branches, commits and pull requests
+- RSS Core — shared storage, memory, authentication and communication/control-plane integration
+- RAY Queue — the sole task execution and worker orchestration path
+- AI Workers — Gemini, OpenAI/Codex-compatible agents and other approved providers behind RAY
+- GitHub Integration — repository source-of-truth/context and controlled code operations
 
 ## Core capabilities
 - Unlimited project records
@@ -21,12 +22,12 @@ Central AI-powered project management and development control system for Razeen 
 - Project status, tasks, requirements, decisions and activity history
 - GitHub repository integration
 - AI provider abstraction
-- Cross-project automation through the internal Autopilot engine
+- Cross-project management without mixing project state
 - Self-hosted PostgreSQL and file/object storage
 - Automatic memory updates after conversations and project actions
 - Commands such as `All Status`, `Continue <Project>`, and project-specific updates
 
-## Architecture
+## Execution architecture
 
 ```text
 User / Android / Web
@@ -36,20 +37,49 @@ RSS AI Project Manager
         |
    +----+-----------------------+
    |    |          |            |
-Memory GitHub     RAY       Autopilot
-   |               |            |
-Storage       Task Queue    AI Workers
-   |               |            |
-   +---------------+------------+
-                   |
-              RSS Projects
+Memory GitHub   Task DB      RSS Core
+   |    |          |             |
+Storage |          v             v
+        |        RAY Queue <-----+
+        |          |
+        |          v
+        |    Cloudflare / Workers
+        |          |
+        |          v
+        |     AI / OpenHands /
+        |     Docker workers
+        |          |
+        +----------v
+             RSS Projects
 ```
 
-The permanent project state belongs to RSS AI Project Manager/RSS Core. AI workers are replaceable execution components and never become a second source of truth.
+**Execution rule:** PM creates and tracks work; RSS Core/RAY executes it. PM must not execute AI work directly as a fallback. If RAY is unavailable or disabled, the task is blocked/retried and remains visible in PM state.
+
+GitHub is the source of truth for project repositories, but GitHub Actions is **not required for runtime scheduling or execution**. Cloudflare/RSS Core/RAY is the intended runtime path because GitHub Actions limits must not block autonomous operation.
+
+## RSS requirements
+
+This repository is also the control specification for RSS projects. Project requirements must be stored and applied per project without cross-project leakage. On project resume, the latest project requirements and repository state must be inspected before execution.
+
+Global RSS KIT requirements include the standardized account/verification, RSS Core connection, cloud/multi-device sync, Premium entitlement behavior, and shared legal/about/contact surfaces, while each project keeps its own branding and UI.
+
+## Project commands
+
+Supported management concepts include:
+- `All Status` — consolidated status across registered RSS projects without exposing branch names
+- `Continue <Project>` — resume a specific project after inspecting its requirements and latest repository state
+- `requirements` — show the project's stored requirements
+- `next` — identify the next concrete project task
+- `go ahead` — execute the next approved task through RSS Core/RAY
+- `fix errors` — diagnose and repair the selected project's errors without changing other projects
 
 ## Repository policy
 
-`riyazamra1/RSS-AI-Project-Manager` is the only active source-of-truth repository for this system. `RSS-Autopilot` and `RSS-Project-Autopilot` are legacy repositories and must not receive new development.
+`riyazamra1/RSS-AI-Project-Manager` is the only active source-of-truth repository for this system. Legacy RSS Autopilot repositories must not receive new development.
+
+## Verification policy
+
+Repository implementation and production verification are separate states. A green repository change does not prove live Cloudflare/RSS Core/RAY execution. Production claims require actual runtime evidence.
 
 ## Safety
 
