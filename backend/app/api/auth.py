@@ -220,6 +220,10 @@ def login(item: LoginRequest):
     return {"access_token": token, "token_type": "bearer", "expires_at": expires, "user": data}
 
 
+@router.get("/me")
+def me(user: dict = Depends(require_auth)):
+    return {"user": user, "workspaces": user_workspaces(user)}
+
 @router.post("/logout")
 def logout(user: dict = Depends(require_auth), authorization: str | None = Header(default=None)):
     # Bearer token is read explicitly so only the current session is revoked.
