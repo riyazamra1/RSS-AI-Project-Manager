@@ -6,6 +6,9 @@ services:
     image: rss-ai-project-manager:latest
     env_file:
       - .env
+    environment:
+      RAY_EXECUTE_TASKS: ${RAY_EXECUTE_TASKS:-true}
+      RSS_RAY_EXECUTE_TASKS: ${RSS_RAY_EXECUTE_TASKS:-true}
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -24,6 +27,9 @@ services:
     image: rss-ai-project-manager:latest
     env_file:
       - .env
+    environment:
+      RAY_EXECUTE_TASKS: ${RAY_EXECUTE_TASKS:-true}
+      RSS_RAY_EXECUTE_TASKS: ${RSS_RAY_EXECUTE_TASKS:-true}
     restart: unless-stopped
     command: ["python", "-m", "app.worker"]
     depends_on:
@@ -37,6 +43,9 @@ services:
     image: rss-ai-project-manager:latest
     env_file:
       - .env
+    environment:
+      RAY_EXECUTE_TASKS: ${RAY_EXECUTE_TASKS:-true}
+      RSS_RAY_EXECUTE_TASKS: ${RSS_RAY_EXECUTE_TASKS:-true}
     restart: unless-stopped
     command: ["python", "-m", "app.scheduler"]
     depends_on:
