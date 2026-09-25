@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0c"><title>RSS AI Project Manager</title><link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div id="loginView" class="auth-shell"><div class="auth-orbit"></div><section class="auth-card glass">
+<div class="brand-mark">RSS</div><p class="eyebrow">RAZEEN SECURE SOLUTION</p><h1>AI Project Manager</h1>
+<p class="muted">Projects, tasks, memory and autonomous execution in one control center.</p>
+<form id="loginForm"><label>Email<input id="email" type="email" autocomplete="email" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+<button class="primary" type="submit">Sign in <span>→</span></button><p id="loginError" class="error"></p></form>
+<div class="auth-note">RSS Core-backed workspace • No credentials are stored in the UI</div></section></div>
+<div id="appView" class="app-shell hidden">
+<aside id="drawer" class="drawer glass"><div class="drawer-brand"><div class="app-icon">AI</div><div><strong>RSS AI</strong><small>Project Manager</small></div><button id="closeDrawer" class="icon-btn mobile-only">×</button></div>
+<nav><button class="nav-item active" data-view="dashboard"><span>⌂</span>Dashboard</button><button class="nav-item" data-view="projects"><span>▦</span>Projects</button><button class="nav-item" data-view="tasks"><span>✓</span>Tasks</button><button class="nav-item" data-view="activity"><span>◷</span>Activity</button></nav>
+<div class="drawer-footer"><div class="status-dot"><i></i><span>PM API online</span></div><button id="themeBtn" class="drawer-action">☼ <span>Theme</span></button><button id="logoutBtn" class="drawer-action">↪ <span>Sign out</span></button><div class="rss-footer"><b>RSS</b><span>Razeen Secure Solution</span></div></div></aside>
+<div id="scrim" class="scrim"></div><main class="main">
+<header class="topbar"><button id="menuBtn" class="icon-btn mobile-only">☰</button><div><p class="eyebrow">CONTROL CENTER</p><h2 id="pageTitle">Dashboard</h2></div><div class="top-actions"><div class="workspace-pill"><span id="workspaceName">Workspace</span><b id="userName">User</b></div><button id="refreshBtn" class="icon-btn">↻</button></div></header>
+<section id="dashboardView" class="view"><div class="hero glass"><div><p class="eyebrow">AUTONOMOUS DEVELOPMENT CONTROL</p><h1>Good to see you, <span id="heroName">there</span>.</h1><p>Monitor projects, queue work and see what the execution layer is doing.</p></div><div class="hero-status"><i></i><span id="executionPath">RSS Core → Cloudflare RAY</span></div></div>
+<div class="metric-grid"><article class="metric glass"><span>Projects</span><strong id="mProjects">—</strong><small id="mActive">— active</small></article><article class="metric glass"><span>Pending tasks</span><strong id="mPending">—</strong><small>waiting for execution</small></article><article class="metric glass"><span>Running</span><strong id="mRunning">—</strong><small>currently executing</small></article><article class="metric glass"><span>Completed</span><strong id="mCompleted">—</strong><small id="mFailed">— failed</small></article></div>
+<div class="two-col"><section class="panel glass"><div class="panel-head"><div><p class="eyebrow">PROJECTS</p><h3>Active projects</h3></div><button class="text-btn" data-view="projects">View all →</button></div><div id="projectList" class="project-list"><div class="skeleton"></div><div class="skeleton"></div></div></section>
+<section class="panel glass"><div class="panel-head"><div><p class="eyebrow">EXECUTION</p><h3>Recent activity</h3></div><button class="text-btn" data-view="activity">Open log →</button></div><div id="activityList" class="activity-list"><div class="skeleton"></div><div class="skeleton"></div></div></section></div></section>
+<section id="projectsView" class="view hidden"><div class="section-head"><div><p class="eyebrow">PROJECT CONTROL</p><h1>Projects</h1><p class="muted">Your workspace project registry.</p></div></div><div id="projectsGrid" class="cards-grid"></div></section>
+<section id="tasksView" class="view hidden"><div class="section-head"><div><p class="eyebrow">WORK QUEUE</p><h1>Tasks</h1><p class="muted">Pending, running and completed work.</p></div></div><div class="filter-row"><button class="filter active" data-filter="all">All</button><button class="filter" data-filter="pending">Pending</button><button class="filter" data-filter="running">Running</button><button class="filter" data-filter="completed">Completed</button><button class="filter" data-filter="failed">Failed</button></div><div id="tasksList" class="task-table glass"></div></section>
+<section id="activityView" class="view hidden"><div class="section-head"><div><p class="eyebrow">AUDIT TRAIL</p><h1>Activity</h1><p class="muted">Recent workspace events.</p></div></div><div id="activityFull" class="timeline glass"></div></section>
+</main></div><script src="/app.js" defer></script></body></html>
