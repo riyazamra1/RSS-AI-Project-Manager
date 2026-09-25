@@ -76,8 +76,8 @@ class RayClient:
         raise RayUnavailable("RSS Core could not queue or directly dispatch the RAY task")
 
     def execute(self, task_id: str, project: str, task: str, context: str, command: list[str] | None = None) -> dict:
-        # Once submit returns an ID, never raise RayUnavailable: TaskRunner treats
-        # that exception as permission to run Autopilot and could duplicate work.
+        # Once submit returns an ID, polling failures are returned as a failed
+        # execution result so the PM can retry without duplicating accepted work.
         ray_task_id = self.submit(task_id, project, task, context, command)
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
