@@ -41,6 +41,11 @@ jobs:
       - name: Compile execution services
         run: python -m py_compile app/services/task_runner.py app/services/ray_client.py
 
+      - name: Run backend tests
+        env:
+          PYTHONPATH: .
+        run: python -m unittest discover -s tests -v
+
       - name: Health endpoint smoke test
         env:
           PYTHONPATH: .
