@@ -37,7 +37,7 @@ class RayClientContractTests(unittest.TestCase):
     def test_poll_timeout_requires_reconciliation(self):
         self.client.submit = lambda *args, **kwargs: "ray-accepted-1"
         self.client._request = lambda *args, **kwargs: {"status": "running", "task": {"id": "ray-accepted-1"}}
-        self.client.poll_timeout_seconds = 0
+        self.client.timeout = 0
         result = self.client.execute("pm-1", "riyazamra1/RSS-Test", "task", "context", ["echo", "test"])
         self.assertEqual(result["status"], "failed")
         self.assertTrue(result["reconciliation_required"])
