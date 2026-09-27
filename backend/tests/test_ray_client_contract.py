@@ -59,12 +59,12 @@ class RayClientContractTests(unittest.TestCase):
             return {"queued": True, "task": {"id": "task-1"}}
 
         self.client._request = request
-        task_id = self.client.submit("task-1", "RSS-Test", "run checks", "context", ["python", "-m", "pytest"])
+        task_id = self.client.submit("task-1", "riyazamra1/RSS-Test", "run checks", "context", ["python", "-m", "pytest"])
 
         self.assertEqual(task_id, "task-1")
         self.assertEqual(captured["method"], "POST")
         self.assertEqual(captured["path"], "/api/v1/ray/tasks")
-        self.assertEqual(captured["payload"]["command"], ["python", "-m", "pytest"])
+        self.assertEqual(captured["payload"]["command"], ["python", "-m", "pytest"])\n        self.assertEqual(captured["payload"]["type"], "CUSTOM")\n        self.assertEqual(captured["payload"]["project"], "RSS-Test")\n        self.assertEqual(captured["payload"]["capabilities"], ["code"])
 
 
 if __name__ == "__main__":
