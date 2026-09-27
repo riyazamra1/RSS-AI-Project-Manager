@@ -34,6 +34,16 @@ class RayClientContractTests(unittest.TestCase):
         self.assertEqual(captured["path"], "/api/v1/ray/tasks")
         self.assertEqual(captured["payload"]["command"], ["python", "-m", "pytest"])
 
+    def test_polling_failure_requires_reconciliation(self):
+        self.client.submit = lambda *args, **kwargs: "ray-accepted-transport"
+        def failing_request(*args, **kwargs):
+            raise RayUnavailable("temporary RAY transport failure")
+        self.client._request = failing_request
+        result = self.client.execute("pm-transport", "riyazamra1/RSS-Test", "task", "context", ["echo", "test"])
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(result["reconciliation_required"])
+        self.assertEqual(result["ray_task_id"], "ray-accepted-transport")
+
     def test_poll_timeout_requires_reconciliation(self):
         self.client.submit = lambda *args, **kwargs: "ray-accepted-1"
         self.client._request = lambda *args, **kwargs: {"status": "running", "task": {"id": "ray-accepted-1"}}
