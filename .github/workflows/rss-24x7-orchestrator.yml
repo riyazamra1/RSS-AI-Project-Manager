@@ -1,8 +1,0 @@
-name: RSS 24x7 Orchestrator — Disabled
-on:
-  workflow_dispatch:
-jobs:
-  disabled:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "GitHub-hosted 24x7 orchestration is disabled. Cloudflare/RSS Core/RAY is the runtime control path."
