@@ -11,7 +11,6 @@
       "Razeen-Secure-Solution-Website"
     ],
     "exclude_repositories": [
-      "RSS-AI-Project-Manager",
       "RSS-Autopilot",
       "RSS-Project-Autopilot",
       "RSS_Invoice_and_Estimate",
@@ -26,9 +25,20 @@
   "controller": {
     "name": "RSS AI Project Manager",
     "repository": "riyazamra1/RSS-AI-Project-Manager",
-    "autopilot_engine": "internal"
+    "autopilot_engine": "rss-core-ray"
   },
   "projects": [
+    {
+      "id": "rss-ai-project-manager",
+      "name": "RSS AI PROJECT MANAGER",
+      "repository": "riyazamra1/RSS-AI-Project-Manager",
+      "enabled": true,
+      "priority": 0,
+      "category": "infrastructure",
+      "discovered": false,
+      "default_branch": "main",
+      "archived": false
+    },
     {
       "id": "rss-cloud-sync",
       "name": "RSS CLOUD SYNC",
