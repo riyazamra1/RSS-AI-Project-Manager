@@ -39,9 +39,16 @@ class TaskRunner:
                     return self._block(task,"RAY execution command is not configured")
             self._state(task,"running","Task accepted for RSS Core/RAY execution")
             result=self.ray.execute(str(task["id"]),repository,task["title"],context,command)
+            ray_task_id=result.get("ray_task_id")
+            if ray_task_id:
+                self._set_ray_task_id(task,ray_task_id)
             if result["status"]=="completed":
-                self._finish(task,"completed",result.get("output",""),"ray",{"ray_task_id":result["ray_task_id"]}); return {"status":"completed","task_id":task["id"],"provider":"ray","ray_task_id":result["ray_task_id"]}
-            return self._fail_or_retry(task,result.get("error","RAY task failed"),result.get("ray_task_id"))
+                if not ray_task_id:
+                    return self._block(task,"RAY reported completion without a task identity")
+                self._finish(task,"completed",result.get("output",""),"ray",{"ray_task_id":ray_task_id}); return {"status":"completed","task_id":task["id"],"provider":"ray","ray_task_id":ray_task_id}
+            if result.get("reconciliation_required"):
+                return self._block(task,result.get("error","RAY task status could not be reconciled"),ray_task_id)
+            return self._fail_or_retry(task,result.get("error","RAY task failed"),ray_task_id)
         except RayUnavailable as exc: return self._block(task,str(exc))
         except Exception as exc: return self._fail_or_retry(task,str(exc),None)
 
@@ -63,9 +70,14 @@ class TaskRunner:
         conn.execute("INSERT INTO activity_log(project_id,workspace_id,event_type,summary,metadata) VALUES(%s,%s,%s,%s,%s::jsonb)",(task["project_id"],task["workspace_id"],"task."+status,summary[:1000],json.dumps({"provider":provider,"execution_path":"rss-core-cloudflare-ray"})))
     def _state(self,task,status,summary):
         with get_connection() as conn: self._set_state(conn,task,status,summary,"ray"); conn.commit()
-    def _block(self,task,reason):
+    def _set_ray_task_id(self,task,ray_task_id):
         with get_connection() as conn:
-            conn.execute("UPDATE tasks SET status='blocked',provider='ray',blocked=true,last_error=%s,updated_at=NOW() WHERE id=%s AND workspace_id=%s",(reason[:2000],task["id"],task["workspace_id"]))
+            conn.execute("UPDATE tasks SET ray_task_id=%s,updated_at=NOW() WHERE id=%s AND workspace_id=%s",(ray_task_id,task["id"],task["workspace_id"]))
+            conn.commit()
+
+    def _block(self,task,reason,ray_task_id=None):
+        with get_connection() as conn:
+            conn.execute("UPDATE tasks SET status='blocked',provider='ray',blocked=true,last_error=%s,ray_task_id=COALESCE(%s,ray_task_id),updated_at=NOW() WHERE id=%s AND workspace_id=%s",(reason[:2000],ray_task_id,task["id"],task["workspace_id"]))
             conn.execute("INSERT INTO activity_log(project_id,workspace_id,event_type,summary,metadata) VALUES(%s,%s,'task.blocked',%s,%s::jsonb)",(task["project_id"],task["workspace_id"],reason[:1000],json.dumps({"execution_path":"rss-core-cloudflare-ray"}))); conn.commit()
         return {"status":"blocked","task_id":task["id"],"provider":"ray","error":reason,"execution_path":"rss-core-cloudflare-ray"}
     def _fail_or_retry(self,task,reason,ray_task_id):
