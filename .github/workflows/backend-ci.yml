@@ -41,6 +41,12 @@ jobs:
       - name: Compile execution services
         run: python -m py_compile app/services/task_runner.py app/services/ray_client.py
 
+      - name: RAY execution contract tests
+        env:
+          PYTHONPATH: .
+          RSS_RAY_EXECUTE_TASKS: "false"
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+
       - name: Health endpoint smoke test
         env:
           PYTHONPATH: .
