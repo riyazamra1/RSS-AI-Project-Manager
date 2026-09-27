@@ -1,8 +1,0 @@
-name: RSS AI Project Manager — Legacy Autopilot Health
-on:
-  workflow_dispatch:
-jobs:
-  disabled:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Legacy Autopilot health workflow disabled."
