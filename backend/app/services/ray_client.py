@@ -76,8 +76,8 @@ class RayClient:
         raise RayUnavailable("RSS Core could not queue or directly dispatch the RAY task")
 
     def execute(self, task_id: str, project: str, task: str, context: str, command: list[str] | None = None) -> dict:
-        # Once submit returns an ID, polling failures are returned as a failed
-        # execution result so the PM can retry without duplicating accepted work.
+        # Once submit returns an ID, polling failures are explicitly marked for
+        # reconciliation. The PM must not automatically resubmit an accepted RAY task.
         ray_task_id = self.submit(task_id, project, task, context, command)
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
@@ -85,6 +85,7 @@ class RayClient:
                 result = self._request("GET", "/api/v1/ray/tasks/" + ray_task_id)
             except RayUnavailable as exc:
                 return {"status": "failed", "ray_task_id": ray_task_id,
+                        "reconciliation_required": True,
                         "error": f"RAY task accepted; status polling failed: {exc}"}
             status = result.get("status")
             if status == "completed":
@@ -95,4 +96,5 @@ class RayClient:
                         "error": result.get("error") or result.get("stderr", "RAY task failed")}
             time.sleep(self.poll_seconds)
         return {"status": "failed", "ray_task_id": ray_task_id,
+                "reconciliation_required": True,
                 "error": "RAY task polling timeout; task may still be running"}
