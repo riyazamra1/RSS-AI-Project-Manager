@@ -75,6 +75,33 @@ class RayClient:
 
         raise RayUnavailable("RSS Core could not queue or directly dispatch the RAY task")
 
+    def get_status(self, ray_task_id: str) -> dict:
+        """Read an already-accepted RAY task without submitting it again."""
+        if not ray_task_id or not isinstance(ray_task_id, str):
+            raise RayUnavailable("RAY task identity is required for reconciliation")
+        return self._request("GET", "/api/v1/ray/tasks/" + ray_task_id)
+
+    def reconcile(self, ray_task_id: str) -> dict:
+        """Reconcile one persisted RAY task identity after a PM restart."""
+        try:
+            result = self.get_status(ray_task_id)
+        except RayUnavailable as exc:
+            return {"status": "unavailable", "ray_task_id": ray_task_id, "error": str(exc)}
+        status = str(result.get("status") or "").lower()
+        if status == "completed":
+            return {"status": "completed", "ray_task_id": ray_task_id,
+                    "output": result.get("stdout", ""), "model": result.get("model")}
+        if status == "failed":
+            return {"status": "failed", "ray_task_id": ray_task_id,
+                    "error": result.get("error") or result.get("stderr", "RAY task failed")}
+        if status in {"queued", "pending", "running", "dispatched", "in_progress"}:
+            return {"status": "running", "ray_task_id": ray_task_id}
+        if status in {"not_found", "missing"} or result.get("found") is False:
+            return {"status": "not_found", "ray_task_id": ray_task_id,
+                    "error": "Persisted RAY task identity was not found; automatic resubmission is disabled"}
+        return {"status": "unknown", "ray_task_id": ray_task_id,
+                "error": "RAY returned an unknown task status; manual reconciliation is required"}
+
     def execute(self, task_id: str, project: str, task: str, context: str, command: list[str] | None = None) -> dict:
         # Once submit returns an ID, polling failures are explicitly marked for
         # reconciliation. The PM must not automatically resubmit an accepted RAY task.
