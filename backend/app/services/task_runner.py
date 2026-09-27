@@ -78,14 +78,14 @@ class TaskRunner:
     def _block(self,task,reason,ray_task_id=None):
         with get_connection() as conn:
             conn.execute("UPDATE tasks SET status='blocked',provider='ray',blocked=true,last_error=%s,ray_task_id=COALESCE(%s,ray_task_id),updated_at=NOW() WHERE id=%s AND workspace_id=%s",(reason[:2000],ray_task_id,task["id"],task["workspace_id"]))
-            conn.execute("INSERT INTO activity_log(project_id,workspace_id,event_type,summary,metadata) VALUES(%s,%s,'task.blocked',%s,%s::jsonb)",(task["project_id"],task["workspace_id"],reason[:1000],json.dumps({"execution_path":"rss-core-cloudflare-ray"}))); conn.commit()
+            conn.execute("INSERT INTO activity_log(project_id,workspace_id,event_type,summary,metadata) VALUES(%s,%s,'task.blocked',%s,%s::jsonb)",(task["project_id"],task["workspace_id"],reason[:1000],json.dumps({"execution_path":"rss-core-cloudflare-ray","ray_task_id":ray_task_id}))); conn.commit()
         return {"status":"blocked","task_id":task["id"],"provider":"ray","error":reason,"execution_path":"rss-core-cloudflare-ray"}
     def _fail_or_retry(self,task,reason,ray_task_id):
         with get_connection() as conn:
             row=conn.execute("SELECT attempts FROM tasks WHERE id=%s AND workspace_id=%s",(task["id"],task["workspace_id"])).fetchone(); attempts=int(row["attempts"] or 0) if row else 1
             status="retry_queued" if attempts<3 else "failed"
-            if attempts<3: conn.execute("UPDATE tasks SET status='pending',provider='ray',last_error=%s,next_retry_at=NOW()+(INTERVAL '60 seconds'),updated_at=NOW() WHERE id=%s AND workspace_id=%s",(reason[:2000],task["id"],task["workspace_id"]))
-            else: conn.execute("UPDATE tasks SET status='failed',provider='ray',last_error=%s,updated_at=NOW() WHERE id=%s AND workspace_id=%s",(reason[:2000],task["id"],task["workspace_id"]))
+            if attempts<3: conn.execute("UPDATE tasks SET status='pending',provider='ray',last_error=%s,next_retry_at=NOW()+(INTERVAL '60 seconds'),ray_task_id=COALESCE(%s,ray_task_id),updated_at=NOW() WHERE id=%s AND workspace_id=%s",(reason[:2000],ray_task_id,task["id"],task["workspace_id"]))
+            else: conn.execute("UPDATE tasks SET status='failed',provider='ray',last_error=%s,ray_task_id=COALESCE(%s,ray_task_id),updated_at=NOW() WHERE id=%s AND workspace_id=%s",(reason[:2000],ray_task_id,task["id"],task["workspace_id"]))
             conn.execute("INSERT INTO activity_log(project_id,workspace_id,event_type,summary,metadata) VALUES(%s,%s,%s,%s,%s::jsonb)",(task["project_id"],task["workspace_id"],"task."+status,reason[:1000],json.dumps({"provider":"ray","ray_task_id":ray_task_id,"attempts":attempts}))); conn.commit()
         return {"status":status,"task_id":task["id"],"provider":"ray","error":reason}
     def _finish(self,task,status,summary,provider,metadata):
