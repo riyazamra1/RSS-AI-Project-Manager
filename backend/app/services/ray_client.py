@@ -60,8 +60,13 @@ class RayClient:
     def submit(self, task_id: str, project: str, task: str, context: str, command: list[str] | None = None) -> str:
         if command is None or not command or not all(isinstance(part, str) and part.strip() for part in command):
             raise RayUnavailable("RAY requires an explicit structured command")
-        payload = {"id": task_id, "project": project, "task": task,
-                   "context": context, "command": command, "priority": "normal"}
+        # RAY v2 uses `project` as the worker workspace name, not a GitHub
+        # owner/repository identifier. The repository remains an explicit
+        # argument of the trusted PM executor command.
+        workspace_project = project.rsplit("/", 1)[-1] if "/" in project else project
+        payload = {"id": task_id, "project": workspace_project, "type": "CUSTOM",
+                   "task": task, "context": context, "command": command,
+                   "capabilities": ["code"], "priority": "normal"}
 
         result = self._request("POST", "/api/v1/ray/tasks", payload)
         if result.get("queued") and result.get("task", {}).get("id"):
