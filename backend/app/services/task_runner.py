@@ -54,6 +54,9 @@ class TaskRunner:
                 "completed": completed, "failed": failed, "blocked": blocked}
 
     def run_next(self) -> dict:
+        # Recover accepted RAY work before claiming new work. Reconciliation only
+        # polls persisted RAY identities and never resubmits them.
+        self.reconcile_accepted_tasks()
         with get_connection() as conn:
             task = conn.execute("SELECT id,project_id,conversation_id,workspace_id,title,status,operation,arguments,command,context FROM tasks WHERE status='pending' AND (next_retry_at IS NULL OR next_retry_at<=NOW()) ORDER BY priority NULLS LAST,created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED").fetchone()
             if task is None: return {"status":"idle"}
