@@ -11,6 +11,48 @@ class TaskRunner:
         self.github_token = os.getenv("RSS_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
         self.ray = RayClient()
 
+    def reconcile_accepted_tasks(self, limit: int = 20) -> dict:
+        """Reconcile persisted RAY identities without ever resubmitting them."""
+        reconciled = completed = failed = blocked = 0
+        with get_connection() as conn:
+            rows = conn.execute(
+                """SELECT id,project_id,workspace_id,title,status,ray_task_id
+                   FROM tasks
+                   WHERE ray_task_id IS NOT NULL
+                     AND status IN ('dispatched','running','blocked')
+                   ORDER BY updated_at ASC, id ASC
+                   LIMIT %s
+                   FOR UPDATE SKIP LOCKED""",
+                (max(1, limit),),
+            ).fetchall()
+        for task in rows:
+            result = self.ray.reconcile(str(task["ray_task_id"]))
+            reconciled += 1
+            if result["status"] == "completed":
+                self._finish(
+                    task,
+                    "completed",
+                    result.get("output", ""),
+                    "ray",
+                    {"ray_task_id": task["ray_task_id"], "reconciled": True},
+                )
+                completed += 1
+            elif result["status"] == "failed":
+                self._mark_accepted_failed(task, result.get("error", "RAY task failed"))
+                failed += 1
+            elif result["status"] in {"not_found", "unknown"}:
+                self._block(
+                    task,
+                    result.get("error", "RAY task requires manual reconciliation"),
+                    task["ray_task_id"],
+                )
+                blocked += 1
+            elif result["status"] == "unavailable":
+                # Keep the durable RAY identity. A later worker cycle can poll it again.
+                blocked += 1
+        return {"status": "reconciled", "reconciled": reconciled,
+                "completed": completed, "failed": failed, "blocked": blocked}
+
     def run_next(self) -> dict:
         with get_connection() as conn:
             task = conn.execute("SELECT id,project_id,conversation_id,workspace_id,title,status,operation,arguments,command,context FROM tasks WHERE status='pending' AND (next_retry_at IS NULL OR next_retry_at<=NOW()) ORDER BY priority NULLS LAST,created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED").fetchone()
@@ -80,6 +122,29 @@ class TaskRunner:
             conn.execute("UPDATE tasks SET status='blocked',provider='ray',blocked=true,last_error=%s,ray_task_id=COALESCE(%s,ray_task_id),updated_at=NOW() WHERE id=%s AND workspace_id=%s",(reason[:2000],ray_task_id,task["id"],task["workspace_id"]))
             conn.execute("INSERT INTO activity_log(project_id,workspace_id,event_type,summary,metadata) VALUES(%s,%s,'task.blocked',%s,%s::jsonb)",(task["project_id"],task["workspace_id"],reason[:1000],json.dumps({"execution_path":"rss-core-cloudflare-ray","ray_task_id":ray_task_id}))); conn.commit()
         return {"status":"blocked","task_id":task["id"],"provider":"ray","error":reason,"execution_path":"rss-core-cloudflare-ray"}
+    def _mark_accepted_failed(self,task,reason):
+        """Finalize an accepted RAY task as failed; never resubmit its identity."""
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE tasks SET status='failed',provider='ray',last_error=%s,blocked=false,updated_at=NOW() WHERE id=%s AND workspace_id=%s",
+                (reason[:2000], task["id"], task["workspace_id"]),
+            )
+            conn.execute(
+                "INSERT INTO activity_log(project_id,workspace_id,event_type,summary,metadata) VALUES(%s,%s,'task.failed',%s,%s::jsonb)",
+                (
+                    task["project_id"],
+                    task["workspace_id"],
+                    reason[:1000],
+                    json.dumps({
+                        "provider": "ray",
+                        "ray_task_id": task["ray_task_id"],
+                        "reconciled": True,
+                        "execution_path": "rss-core-cloudflare-ray",
+                    }),
+                ),
+            )
+            conn.commit()
+
     def _fail_or_retry(self,task,reason,ray_task_id):
         with get_connection() as conn:
             row=conn.execute("SELECT attempts FROM tasks WHERE id=%s AND workspace_id=%s",(task["id"],task["workspace_id"])).fetchone(); attempts=int(row["attempts"] or 0) if row else 1
