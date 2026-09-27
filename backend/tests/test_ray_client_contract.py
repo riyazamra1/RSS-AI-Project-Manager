@@ -19,6 +19,38 @@ class RayClientContractTests(unittest.TestCase):
         with self.assertRaises(RayUnavailable):
             self.client.submit("task-1", "RSS-Test", "task", "context", [])
 
+    def test_reconcile_completed_does_not_submit(self):
+        calls = []
+
+        def request(method, path, payload=None):
+            calls.append((method, path))
+            return {"status": "completed", "stdout": "done"}
+
+        self.client._request = request
+        result = self.client.reconcile("ray-existing-1")
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["ray_task_id"], "ray-existing-1")
+        self.assertEqual(calls, [("GET", "/api/v1/ray/tasks/ray-existing-1")])
+
+    def test_reconcile_running_keeps_same_identity(self):
+        calls = []
+
+        def request(method, path, payload=None):
+            calls.append((method, path))
+            return {"status": "running", "task": {"id": "ray-existing-2"}}
+
+        self.client._request = request
+        result = self.client.reconcile("ray-existing-2")
+        self.assertEqual(result["status"], "running")
+        self.assertEqual(result["ray_task_id"], "ray-existing-2")
+        self.assertEqual(calls, [("GET", "/api/v1/ray/tasks/ray-existing-2")])
+
+    def test_reconcile_not_found_disables_automatic_resubmission(self):
+        self.client._request = lambda *args, **kwargs: {"status": "not_found", "found": False}
+        result = self.client.reconcile("ray-missing-1")
+        self.assertEqual(result["status"], "not_found")
+        self.assertIn("automatic resubmission is disabled", result["error"])
+
     def test_explicit_command_is_submitted(self):
         captured = {}
 
