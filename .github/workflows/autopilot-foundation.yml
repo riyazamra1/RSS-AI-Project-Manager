@@ -1,8 +1,0 @@
-name: RSS AI Project Manager — Legacy Autopilot Validation
-on:
-  workflow_dispatch:
-jobs:
-  disabled:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Legacy Autopilot is disabled. Runtime execution is RSS Core/RAY via Cloudflare."
