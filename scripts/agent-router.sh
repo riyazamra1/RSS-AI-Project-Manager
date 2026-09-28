@@ -6,7 +6,7 @@ mkdir -p "$LOG_DIR"
 AGENT_STATE_FILE="$LOG_DIR/agent-state.txt"
 GEMINI_PRIMARY_MODEL="${GEMINI_MODEL:-}"
 GEMINI_FALLBACK_MODEL="${GEMINI_FALLBACK_MODEL:-gemini-3.1-flash-lite}"
-AGENT="${RSS_AUTOPILOT_AGENT:-auto}"
+AGENT="${RSS_RAY_AGENT:-auto}"
 [[ "$AGENT" == auto ]] && AGENT=codex
 is_quota_error(){ grep -Eiq '429|quota|rate.?limit|exhausted.*daily|RESOURCE_EXHAUSTED' "$1"; }
 run_gemini_model(){ local model="$1" output="$2"; if [[ -n "$model" ]]; then gemini --model "$model" --approval-mode=yolo --skip-trust --output-format=json -p "$(cat "$PROMPT_FILE")" > "$output" 2>&1; else gemini --approval-mode=yolo --skip-trust --output-format=json -p "$(cat "$PROMPT_FILE")" > "$output" 2>&1; fi; }
