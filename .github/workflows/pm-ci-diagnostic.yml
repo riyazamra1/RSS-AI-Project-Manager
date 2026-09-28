@@ -29,10 +29,10 @@ jobs:
           set +e
           mkdir -p diagnostic
           run_stage() {
-            name="$name"
+            name="$1"
             shift
             echo "===== $name =====" | tee -a diagnostic/report.txt
-            "$name" >"diagnostic/$name.out" 2>&1
+            "$@" >"diagnostic/$name.out" 2>&1
             code=$?
             echo "exit_code=$code" | tee -a diagnostic/report.txt
             cat "diagnostic/$name.out" >> diagnostic/report.txt
