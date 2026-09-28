@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     rss_core_api_token: str = ""
     ray_poll_seconds: int = 5
     ray_poll_timeout_seconds: int = 900
+    ray_not_found_grace_seconds: int = 30
     auto_chat_scheduler_enabled: bool = True
     auto_chat_poll_seconds: int = 30
     auto_chat_batch_size: int = 10
