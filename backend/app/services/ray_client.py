@@ -18,6 +18,7 @@ class RayClient:
         self.token = settings.rss_core_api_token
         self.poll_seconds = max(1, settings.ray_poll_seconds)
         self.timeout = max(5, settings.ray_poll_timeout_seconds)
+        self.not_found_grace_seconds = max(0, min(settings.ray_not_found_grace_seconds, self.timeout))
 
     def _request(self, method: str, path: str, payload: dict | None = None) -> dict:
         if not self.base_url or not self.token:
@@ -60,9 +61,6 @@ class RayClient:
     def submit(self, task_id: str, project: str, task: str, context: str, command: list[str] | None = None) -> str:
         if command is None or not command or not all(isinstance(part, str) and part.strip() for part in command):
             raise RayUnavailable("RAY requires an explicit structured command")
-        # RAY v2 uses `project` as the worker workspace name, not a GitHub
-        # owner/repository identifier. The repository remains an explicit
-        # argument of the trusted PM executor command.
         workspace_project = project.rsplit("/", 1)[-1] if "/" in project else project
         payload = {"id": task_id, "project": workspace_project, "type": "CUSTOM",
                    "task": task, "context": context, "command": command,
@@ -72,8 +70,6 @@ class RayClient:
         if result.get("queued") and result.get("task", {}).get("id"):
             return str(result["task"]["id"])
 
-        # Fall back to direct dispatch only when the queue endpoint responds
-        # normally but reports that it did not accept the task.
         result = self._request("POST", "/api/v1/ray/dispatch", payload)
         if result.get("dispatched") and result.get("task", {}).get("id"):
             return str(result["task"]["id"])
@@ -108,14 +104,20 @@ class RayClient:
                 "error": "RAY returned an unknown task status; manual reconciliation is required"}
 
     def execute(self, task_id: str, project: str, task: str, context: str, command: list[str] | None = None) -> dict:
-        # Once submit returns an ID, polling failures are explicitly marked for
-        # reconciliation. The PM must not automatically resubmit an accepted RAY task.
+        # A queued RAY task is stored in Core before the worker claims it. Core's
+        # status endpoint proxies the worker, so a temporary HTTP 404 is expected
+        # during this pre-claim window. Retry it briefly instead of falsely
+        # converting an accepted task into a reconciliation failure.
         ray_task_id = self.submit(task_id, project, task, context, command)
         deadline = time.monotonic() + self.timeout
+        not_found_deadline = time.monotonic() + self.not_found_grace_seconds
         while time.monotonic() < deadline:
             try:
                 result = self._request("GET", "/api/v1/ray/tasks/" + ray_task_id)
             except RayUnavailable as exc:
+                if "HTTP 404" in str(exc) and time.monotonic() < not_found_deadline:
+                    time.sleep(self.poll_seconds)
+                    continue
                 return {"status": "failed", "ray_task_id": ray_task_id,
                         "reconciliation_required": True,
                         "error": f"RAY task accepted; status polling failed: {exc}"}
