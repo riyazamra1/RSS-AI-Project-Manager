@@ -1,16 +1,10 @@
 {
-  "version": 1,
-  "name": "RSS Autopilot Engine",
-  "mode": "safe",
-  "cost_policy": "zero_dollar_first",
-  "human_gate": true,
-  "pilot_project": "rss-cloud-sync",
-  "execution": {
-    "github_actions": true,
-    "self_hosted_runner": false,
-    "oracle_instance": false,
-    "rdp_runner": false
-  },
+  "version": 2,
+  "deprecated": true,
+  "name": "Legacy RSS Autopilot Compatibility Manifest",
+  "replacement": "rss-core-ray",
+  "execution_engine": "rss-core-ray",
+  "github_actions_runtime": false,
   "rules": {
     "never_commit_secrets": true,
     "never_delete_without_approval": true,
