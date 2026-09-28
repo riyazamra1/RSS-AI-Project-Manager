@@ -101,7 +101,7 @@ class RayClientContractTests(unittest.TestCase):
 
         result = self.client.execute(
             "task-1",
-            "riyazam1/RSS-Test",
+            "riyazamra1/RSS-Test",
             "run checks",
             "context",
             ["python", "-m", "pytest"],
