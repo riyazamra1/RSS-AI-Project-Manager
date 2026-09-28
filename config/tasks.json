@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "tasks": [
     {
       "id": "phase-a-001",
@@ -36,8 +36,8 @@
     {
       "id": "phase-a-004",
       "project": "rss-ai-project-manager",
-      "title": "Enable internal Autopilot engine for future RSS repositories",
-      "status": "pending",
+      "title": "Complete RSS Core/RAY orchestration for future RSS repositories",
+      "status": "in_progress",
       "priority": 4,
       "depends_on": [
         "phase-a-003"
