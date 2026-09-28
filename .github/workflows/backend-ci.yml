@@ -50,4 +50,5 @@ jobs:
       - name: Health endpoint smoke test
         env:
           PYTHONPATH: .
+          AUTO_CHAT_SCHEDULER_ENABLED: "false"
         run: python -c "from fastapi.testclient import TestClient; from app.main import app; r=TestClient(app).get('/health'); assert r.status_code == 200; assert r.json()['status'] == 'ok'"
