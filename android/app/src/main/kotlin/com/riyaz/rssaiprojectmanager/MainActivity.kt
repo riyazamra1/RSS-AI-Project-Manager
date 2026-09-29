@@ -41,6 +41,13 @@ private class ProjectManagerApi(private val baseUrl: String) {
         JSONObject(request("/auth/login", "POST", JSONObject().put("email", email).put("password", password).toString()))
 
     fun projects(): JSONArray = JSONArray(request("/api/v1/projects", "GET"))
+
+    fun createProject(id: String, name: String, repository: String?, description: String): JSONObject {
+        val body = JSONObject().put("id", id).put("name", name)
+        if (!repository.isNullOrBlank()) body.put("repository", repository)
+        if (description.isNotBlank()) body.put("description", description)
+        return JSONObject(request("/api/v1/projects", "POST", body.toString()))
+    }
     fun tasks(projectId: String): JSONArray = JSONArray(request("/api/v1/tasks?project_id=" + projectId, "GET"))
 
     fun createTask(title: String, projectId: String, context: String): JSONObject {
@@ -76,7 +83,7 @@ private fun ProjectManagerApp() {
     var tasks by remember { mutableStateOf(emptyList<Task>()) }
     var taskTitle by remember { mutableStateOf("") }
     var taskContext by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }\n    var showProjectForm by remember { mutableStateOf(false) }\n    var projectId by remember { mutableStateOf("") }\n    var projectName by remember { mutableStateOf("") }\n    var projectRepo by remember { mutableStateOf("") }
 
     fun loadProjects() {
         scope.launch(Dispatchers.IO) {
@@ -192,6 +199,21 @@ private fun Dashboard(
     onSelect: (Project) -> Unit, onCreate: () -> Unit, onGoAhead: () -> Unit,
     onRefresh: () -> Unit, busy: Boolean, error: String?
 ) {
+    if (showProjectForm) {
+        AlertDialog(
+            onDismissRequest = onDismissProjectForm,
+            title = { Text("Create RSS Project") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(projectId, onProjectId, label = { Text("Project ID") }, singleLine = true)
+                    OutlinedTextField(projectName, onProjectName, label = { Text("Project name") }, singleLine = true)
+                    OutlinedTextField(projectRepo, onProjectRepo, label = { Text("GitHub repository") }, singleLine = true)
+                }
+            },
+            confirmButton = { Button(onClick = { onCreateProject(projectId.trim(), projectName.trim(), projectRepo.trim()) }, enabled = projectId.isNotBlank() && projectName.isNotBlank() && !busy) { Text("Create") } },
+            dismissButton = { TextButton(onClick = onDismissProjectForm) { Text("Cancel") } }
+        )
+    }
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
