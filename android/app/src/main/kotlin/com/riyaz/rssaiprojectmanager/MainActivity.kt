@@ -83,7 +83,11 @@ private fun ProjectManagerApp() {
     var tasks by remember { mutableStateOf(emptyList<Task>()) }
     var taskTitle by remember { mutableStateOf("") }
     var taskContext by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }\n    var showProjectForm by remember { mutableStateOf(false) }\n    var projectId by remember { mutableStateOf("") }\n    var projectName by remember { mutableStateOf("") }\n    var projectRepo by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var showProjectForm by remember { mutableStateOf(false) }
+    var projectId by remember { mutableStateOf("") }
+    var projectName by remember { mutableStateOf("") }
+    var projectRepo by remember { mutableStateOf("") }
 
     fun loadProjects() {
         scope.launch(Dispatchers.IO) {
@@ -162,7 +166,25 @@ private fun ProjectManagerApp() {
                     },
                     onRefresh = { loadProjects(); selected?.let { loadTasks(it) } },
                     busy = busy,
-                    error = error
+                    error = error,
+                    onCreateProject = { id, name, repo ->
+                        busy = true
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                api.createProject(id, name, repo, "")
+                                showProjectForm = false
+                                projectId = ""; projectName = ""; projectRepo = ""
+                                loadProjects()
+                                error = null
+                            } catch (e: Exception) { error = e.message }
+                            finally { busy = false }
+                        }
+                    },
+                    showProjectForm = showProjectForm,
+                    onDismissProjectForm = { showProjectForm = false },
+                    projectId = projectId, onProjectId = { projectId = it },
+                    projectName = projectName, onProjectName = { projectName = it },
+                    projectRepo = projectRepo, onProjectRepo = { projectRepo = it }
                 )
             }
         }
@@ -197,7 +219,12 @@ private fun Dashboard(
     taskTitle: String, onTaskTitle: (String) -> Unit,
     taskContext: String, onTaskContext: (String) -> Unit,
     onSelect: (Project) -> Unit, onCreate: () -> Unit, onGoAhead: () -> Unit,
-    onRefresh: () -> Unit, busy: Boolean, error: String?
+    onRefresh: () -> Unit, busy: Boolean, error: String?,
+    onCreateProject: (String, String, String) -> Unit,
+    showProjectForm: Boolean, onDismissProjectForm: () -> Unit,
+    projectId: String, onProjectId: (String) -> Unit,
+    projectName: String, onProjectName: (String) -> Unit,
+    projectRepo: String, onProjectRepo: (String) -> Unit
 ) {
     if (showProjectForm) {
         AlertDialog(
