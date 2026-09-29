@@ -52,10 +52,18 @@ class TaskRunner:
         return {"status": "reconciled", "reconciled": reconciled,
                 "completed": completed, "failed": failed, "blocked": blocked}
 
-    def run_next(self) -> dict:
+    def run_next(self, workspace_id: str | None = None) -> dict:
         self.reconcile_accepted_tasks()
         with get_connection() as conn:
-            task = conn.execute("SELECT id,project_id,conversation_id,workspace_id,title,status,operation,arguments,command,context FROM tasks WHERE status='pending' AND (next_retry_at IS NULL OR next_retry_at<=NOW()) ORDER BY priority NULLS LAST,created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED").fetchone()
+            if workspace_id:
+                task = conn.execute(
+                    "SELECT id,project_id,conversation_id,workspace_id,title,status,operation,arguments,command,context FROM tasks WHERE workspace_id=%s AND status='pending' AND (next_retry_at IS NULL OR next_retry_at<=NOW()) ORDER BY priority NULLS LAST,created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED",
+                    (workspace_id,),
+                ).fetchone()
+            else:
+                task = conn.execute(
+                    "SELECT id,project_id,conversation_id,workspace_id,title,status,operation,arguments,command,context FROM tasks WHERE status='pending' AND (next_retry_at IS NULL OR next_retry_at<=NOW()) ORDER BY priority NULLS LAST,created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED"
+                ).fetchone()
             if task is None: return {"status":"idle"}
             entitlement = conn.execute("SELECT enabled FROM service_entitlements WHERE workspace_id=%s AND service_key='project_manager'",(task["workspace_id"],)).fetchone()
             if not entitlement or not entitlement["enabled"]:
