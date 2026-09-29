@@ -2,6 +2,14 @@
 
 Central AI-powered project management and development control system for Razeen Secure Solution.
 
+## Client applications
+
+RSS AI Project Manager now has two full clients sharing the same backend/API:
+- **Android:** native Kotlin/Jetpack Compose application, package `com.riyaz.rssaiprojectmanager`
+- **Web:** backend/web control interface
+
+Both clients use the same authenticated workspace state. Android can sign in, load projects, inspect tasks, create tasks, refresh project state, and request the next approved task through the authenticated backend execution endpoint. Privileged credentials remain server-side.
+
 ## Unified system
 
 **RSS AI Project Manager is the single source of truth for project management and autonomous development.**
