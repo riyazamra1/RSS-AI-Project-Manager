@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.RSSAIProjectManager" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:statusBarColor">#0B0B0B</item>
+        <item name="android:navigationBarColor">#0B0B0B</item>
+    </style>
+</resources>
