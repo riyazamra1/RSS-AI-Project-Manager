@@ -54,5 +54,41 @@ class RayClientContractTests(unittest.TestCase):
         self.assertEqual(result["ray_task_id"], "ray-accepted-1")
 
 
+    def test_completed_reconciliation_never_resubmits(self):
+        calls = []
+
+        def request(method, path, payload=None):
+            calls.append((method, path, payload))
+            return {"status": "completed", "stdout": "done", "model": "test-model"}
+
+        self.client._request = request
+        result = self.client.reconcile("ray-complete-1")
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["ray_task_id"], "ray-complete-1")
+        self.assertEqual(result["output"], "done")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], "GET")
+        self.assertEqual(calls[0][1], "/api/v1/ray/tasks/ray-complete-1")
+
+    def test_missing_reconciliation_is_not_resubmitted(self):
+        calls = []
+
+        def request(method, path, payload=None):
+            calls.append((method, path, payload))
+            return {"found": False, "status": "not_found"}
+
+        self.client._request = request
+        self.client.submit = lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("reconciliation must never resubmit")
+        )
+
+        result = self.client.reconcile("ray-missing-1")
+
+        self.assertEqual(result["status"], "not_found")
+        self.assertEqual(result["ray_task_id"], "ray-missing-1")
+        self.assertEqual(len(calls), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
