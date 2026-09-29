@@ -42,12 +42,20 @@ private class ProjectManagerApi(private val baseUrl: String) {
 
     fun projects(): JSONArray = JSONArray(request("/api/v1/projects", "GET"))
 
+    fun updateProject(id: String, name: String, repository: String?, description: String): JSONObject {
+        val body = JSONObject().put("name", name)
+        if (!repository.isNullOrBlank()) body.put("repository", repository)
+        if (description.isNotBlank()) body.put("description", description)
+        return JSONObject(request("/api/v1/projects/" + id, "PATCH", body.toString()))
+    }
+
     fun createProject(id: String, name: String, repository: String?, description: String): JSONObject {
         val body = JSONObject().put("id", id).put("name", name)
         if (!repository.isNullOrBlank()) body.put("repository", repository)
         if (description.isNotBlank()) body.put("description", description)
         return JSONObject(request("/api/v1/projects", "POST", body.toString()))
     }
+    fun project(id: String): JSONObject = JSONObject(request("/api/v1/projects/" + id, "GET"))
     fun tasks(projectId: String): JSONArray = JSONArray(request("/api/v1/tasks?project_id=" + projectId, "GET"))
 
     fun createTask(title: String, projectId: String, context: String): JSONObject {
@@ -87,7 +95,7 @@ private fun ProjectManagerApp() {
     var showProjectForm by remember { mutableStateOf(false) }
     var projectId by remember { mutableStateOf("") }
     var projectName by remember { mutableStateOf("") }
-    var projectRepo by remember { mutableStateOf("") }
+    var projectRepo by remember { mutableStateOf("") }\n    var projectDescription by remember { mutableStateOf("") }\n    var editingProject by remember { mutableStateOf<Project?>(null) }
 
     fun loadProjects() {
         scope.launch(Dispatchers.IO) {
@@ -184,7 +192,7 @@ private fun ProjectManagerApp() {
                     onDismissProjectForm = { showProjectForm = false },
                     projectId = projectId, onProjectId = { projectId = it },
                     projectName = projectName, onProjectName = { projectName = it },
-                    projectRepo = projectRepo, onProjectRepo = { projectRepo = it }
+                    projectRepo = projectRepo, onProjectRepo = { projectRepo = it },\n                    editingProject = editingProject, onDismissEdit = { editingProject = null },\n                    onUpdateProject = { p, name, repo ->\n                        busy = true\n                        scope.launch(Dispatchers.IO) {\n                            try { api.updateProject(p.id, name, repo, projectDescription); editingProject = null; loadProjects(); error = null }\n                            catch (e: Exception) { error = e.message } finally { busy = false }\n                        }\n                    }
                 )
             }
         }
@@ -226,6 +234,21 @@ private fun Dashboard(
     projectName: String, onProjectName: (String) -> Unit,
     projectRepo: String, onProjectRepo: (String) -> Unit
 ) {
+    if (editingProject != null) {
+        AlertDialog(
+            onDismissRequest = onDismissEdit,
+            title = { Text("Edit Project") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("ID: " + editingProject.id)
+                    OutlinedTextField(projectName, onProjectName, label = { Text("Project name") }, singleLine = true)
+                    OutlinedTextField(projectRepo, onProjectRepo, label = { Text("GitHub repository") }, singleLine = true)
+                }
+            },
+            confirmButton = { Button(onClick = { onUpdateProject(editingProject, projectName.trim(), projectRepo.trim()) }, enabled = !busy && projectName.isNotBlank()) { Text("Save") } },
+            dismissButton = { TextButton(onClick = onDismissEdit) { Text("Cancel") } }
+        )
+    }
     if (showProjectForm) {
         AlertDialog(
             onDismissRequest = onDismissProjectForm,
