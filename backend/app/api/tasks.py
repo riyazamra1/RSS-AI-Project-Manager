@@ -65,7 +65,7 @@ def run_next_task(_: bool = Depends(require_worker)) -> dict:
 def run_next_user_task(ctx: dict = Depends(require_workspace_role("manager"))) -> dict:
     """Run the next approved pending task for the authenticated workspace."""
     from ..services.task_runner import TaskRunner
-    result = TaskRunner().run_next()
+    result = TaskRunner().run_next(ctx["workspace_id"])
     if result.get("task_id") is not None:
         with get_connection() as conn:
             row = conn.execute("SELECT workspace_id FROM tasks WHERE id=%s", (result["task_id"],)).fetchone()
