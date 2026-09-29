@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..db import get_connection
-from ..security import current_workspace, require_worker, audit
+from ..security import current_workspace, require_worker, require_workspace_role, audit
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -59,3 +59,16 @@ def list_tasks(project_id: str | None = None, ctx: dict = Depends(current_worksp
 def run_next_task(_: bool = Depends(require_worker)) -> dict:
     from ..services.task_runner import TaskRunner
     return TaskRunner().run_next()
+
+
+@router.post("/run-next-user")
+def run_next_user_task(ctx: dict = Depends(require_workspace_role("manager"))) -> dict:
+    """Run the next approved pending task for the authenticated workspace."""
+    from ..services.task_runner import TaskRunner
+    result = TaskRunner().run_next()
+    if result.get("task_id") is not None:
+        with get_connection() as conn:
+            row = conn.execute("SELECT workspace_id FROM tasks WHERE id=%s", (result["task_id"],)).fetchone()
+        if not row or str(row["workspace_id"]) != str(ctx["workspace_id"]):
+            raise HTTPException(403, "Task is outside the current workspace")
+    return result
