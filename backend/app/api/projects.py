@@ -54,6 +54,21 @@ def create_project(project: ProjectCreate, ctx: dict = Depends(require_workspace
     audit(ctx["user"],ctx["workspace_id"],"project.create","project",project.id)
     return dict(row)
 
+@router.patch("/{project_id}")
+def update_project(project_id: str, project: ProjectCreate, ctx: dict = Depends(require_workspace_role("manager"))) -> dict:
+    with get_connection() as conn:
+        row = conn.execute(
+            """UPDATE projects SET name=%s,repository=%s,enabled=%s,priority=%s,description=%s,updated_at=NOW()
+               WHERE id=%s AND workspace_id=%s
+               RETURNING id,name,repository,enabled,priority,description,status,start_date,due_date,archived,created_at,updated_at""",
+            (project.name,project.repository,project.enabled,project.priority,project.description,project_id,ctx["workspace_id"]),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "Project not found")
+        conn.commit()
+    audit(ctx["user"],ctx["workspace_id"],"project.update","project",project_id)
+    return dict(row)
+
 @router.post("/sync")
 def sync_projects(_: bool = Depends(require_worker)) -> dict:
     try:
