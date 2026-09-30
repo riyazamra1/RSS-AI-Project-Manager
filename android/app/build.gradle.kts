@@ -3,6 +3,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val ciVersionCode = providers.gradleProperty("versionCode").orNull?.toIntOrNull() ?: 1
+val ciVersionName = providers.gradleProperty("versionName").orNull ?: "0.1.0"
+
 android {
     namespace = "com.riyaz.rssaiprojectmanager"
     compileSdk = 35
@@ -10,11 +14,12 @@ android {
         applicationId = "com.riyaz.rssaiprojectmanager"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = ciVersionCode
+        versionName = ciVersionName
     }
     buildTypes { release { isMinifyEnabled = false } }
 }
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
