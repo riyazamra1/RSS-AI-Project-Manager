@@ -184,6 +184,10 @@ private fun ProjectManagerApp() {
         }
     }
 
+    LaunchedEffect(signedIn) {
+        if (signedIn) loadProjects()
+    }
+
     MaterialTheme {
         Surface(Modifier.fillMaxSize()) {
             if (!signedIn) {
