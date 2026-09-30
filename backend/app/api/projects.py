@@ -15,6 +15,13 @@ class ProjectCreate(BaseModel):
     priority: int = 100
     description: str | None = Field(default=None, max_length=5000)
 
+class ProjectUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    repository: str | None = None
+    enabled: bool = True
+    priority: int = 100
+    description: str | None = Field(default=None, max_length=5000)
+
 @router.get("")
 def list_projects(ctx: dict = Depends(current_workspace)) -> list[dict]:
     with get_connection() as conn:
@@ -55,7 +62,7 @@ def create_project(project: ProjectCreate, ctx: dict = Depends(require_workspace
     return dict(row)
 
 @router.patch("/{project_id}")
-def update_project(project_id: str, project: ProjectCreate, ctx: dict = Depends(require_workspace_role("manager"))) -> dict:
+def update_project(project_id: str, project: ProjectUpdate, ctx: dict = Depends(require_workspace_role("manager"))) -> dict:
     with get_connection() as conn:
         row = conn.execute(
             """UPDATE projects SET name=%s,repository=%s,enabled=%s,priority=%s,description=%s,updated_at=NOW()
