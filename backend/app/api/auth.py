@@ -217,7 +217,15 @@ def login(item: LoginRequest):
     token, expires = create_session(str(user["id"]))
     data = dict(user)
     data.pop("password_hash", None)
-    return {"access_token": token, "token_type": "bearer", "expires_at": expires, "user": data}
+    workspaces = user_workspaces({"id": user["id"]})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_at": expires,
+        "user": data,
+        "workspaces": workspaces,
+        "workspace": workspaces[0] if workspaces else None,
+    }
 
 
 @router.post("/logout")
