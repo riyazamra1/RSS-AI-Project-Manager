@@ -31,12 +31,16 @@ workflows:
       - name: Build debug APK
         script: |
           cd "$CM_BUILD_DIR/android"
-          ./gradlew --no-daemon assembleDebug             -PversionCode="$BUILD_NUMBER"             -PversionName="0.1.$BUILD_NUMBER"
+          ./gradlew --no-daemon assembleDebug \
+            -PversionCode="$BUILD_NUMBER" \
+            -PversionName="0.1.$BUILD_NUMBER"
 
       - name: Build release APK
         script: |
           cd "$CM_BUILD_DIR/android"
-          ./gradlew --no-daemon assembleRelease             -PversionCode="$BUILD_NUMBER"             -PversionName="0.1.$BUILD_NUMBER"
+          ./gradlew --no-daemon assembleRelease \
+            -PversionCode="$BUILD_NUMBER" \
+            -PversionName="0.1.$BUILD_NUMBER"
 
     artifacts:
       - android/app/build/outputs/apk/debug/*.apk
@@ -67,17 +71,23 @@ workflows:
             : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
             : "${RSS_R2_BUCKET:?RSS_R2_BUCKET is required}"
 
-            APK_PATH="$CM_BUILD_DIR/android/app/build/outputs/apk/release/app-release.apk"
+            APK_PATH="$CM_BUILD_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+            APK_NAME="rss-ai-project-manager-$BUILD_NUMBER-debug.apk"
             test -f "$APK_PATH"
 
             # Keep deployment in the RSS R2 namespace.
-            OBJECT_KEY="$RSS_R2_PREFIX/rss-ai-project-manager-$BUILD_NUMBER.apk"
+            OBJECT_KEY="$RSS_R2_PREFIX/$APK_NAME"
 
             echo "Installing Cloudflare Wrangler..."
             npm install --global wrangler
 
             echo "Uploading $APK_PATH to RSS R2: $RSS_R2_BUCKET/$OBJECT_KEY"
-            CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN"             CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID"               wrangler r2 object put "$RSS_R2_BUCKET/$OBJECT_KEY"                 --file "$APK_PATH"                 --remote                 --content-type application/vnd.android.package-archive
+            CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
+            CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID" \
+              wrangler r2 object put "$RSS_R2_BUCKET/$OBJECT_KEY" \
+                --file "$APK_PATH" \
+                --remote \
+                --content-type application/vnd.android.package-archive
 
             echo "RSS R2 deployment completed."
             echo "Object: $RSS_R2_BUCKET/$OBJECT_KEY"
