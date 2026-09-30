@@ -16,6 +16,7 @@ workflows:
     environment:
       vars:
         PACKAGE_NAME: "com.riyaz.rssaiprojectmanager"
+        RSS_R2_PREFIX: "android/rss-ai-project-manager"
 
     scripts:
       - name: Set Android SDK location
@@ -30,16 +31,12 @@ workflows:
       - name: Build debug APK
         script: |
           cd "$CM_BUILD_DIR/android"
-          ./gradlew --no-daemon assembleDebug \
-            -PversionCode="$BUILD_NUMBER" \
-            -PversionName="0.1.$BUILD_NUMBER"
+          ./gradlew --no-daemon assembleDebug             -PversionCode="$BUILD_NUMBER"             -PversionName="0.1.$BUILD_NUMBER"
 
       - name: Build release APK
         script: |
           cd "$CM_BUILD_DIR/android"
-          ./gradlew --no-daemon assembleRelease \
-            -PversionCode="$BUILD_NUMBER" \
-            -PversionName="0.1.$BUILD_NUMBER"
+          ./gradlew --no-daemon assembleRelease             -PversionCode="$BUILD_NUMBER"             -PversionName="0.1.$BUILD_NUMBER"
 
     artifacts:
       - android/app/build/outputs/apk/debug/*.apk
@@ -53,37 +50,34 @@ workflows:
           success: true
           failure: true
 
-      # Firebase App Distribution uses the debug APK because Android signs
-      # the debug variant automatically. Configure the three secret variables
-      # in Codemagic to activate the deployment.
+      # RSS infrastructure deployment:
+      # Codemagic uploads the generated APK to the existing Cloudflare R2
+      # storage used by RSS infrastructure. No Firebase is involved.
+      #
+      # Configure these as SECRET variables in Codemagic:
+      # CLOUDFLARE_API_TOKEN  - R2 Object Read & Write token
+      # CLOUDFLARE_ACCOUNT_ID - RSS Cloudflare account ID
+      # RSS_R2_BUCKET          - existing RSS R2 bucket name
       scripts:
-        - name: Deploy signed APK to Firebase App Distribution
+        - name: Deploy APK to RSS Cloudflare R2
           script: |
-            set -e
+            set -euo pipefail
 
-            if [ -z "$FIREBASE_SERVICE_ACCOUNT" ] || [ -z "$FIREBASE_ANDROID_APP_ID" ]; then
-              echo "Firebase deployment credentials are not configured in Codemagic."
-              echo "APK artifacts were built successfully; deployment skipped."
-              exit 0
-            fi
+            : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required}"
+            : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
+            : "${RSS_R2_BUCKET:?RSS_R2_BUCKET is required}"
 
-            CREDENTIALS_FILE="$CM_BUILD_DIR/firebase-service-account.json"
-            printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$CREDENTIALS_FILE"
-            export GOOGLE_APPLICATION_CREDENTIALS="$CREDENTIALS_FILE"
-
-            APK_PATH="$CM_BUILD_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+            APK_PATH="$CM_BUILD_DIR/android/app/build/outputs/apk/release/app-release.apk"
             test -f "$APK_PATH"
 
-            RELEASE_NOTES="RSS AI Project Manager build $BUILD_NUMBER"
-            if [ -n "$FIREBASE_TESTER_GROUPS" ]; then
-              firebase appdistribution:distribute "$APK_PATH" \
-                --app "$FIREBASE_ANDROID_APP_ID" \
-                --groups "$FIREBASE_TESTER_GROUPS" \
-                --release-notes "$RELEASE_NOTES"
-            else
-              firebase appdistribution:distribute "$APK_PATH" \
-                --app "$FIREBASE_ANDROID_APP_ID" \
-                --release-notes "$RELEASE_NOTES"
-            fi
+            # Keep deployment in the RSS R2 namespace.
+            OBJECT_KEY="$RSS_R2_PREFIX/rss-ai-project-manager-$BUILD_NUMBER.apk"
 
-            rm -f "$CREDENTIALS_FILE"
+            echo "Installing Cloudflare Wrangler..."
+            npm install --global wrangler
+
+            echo "Uploading $APK_PATH to RSS R2: $RSS_R2_BUCKET/$OBJECT_KEY"
+            CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN"             CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID"               wrangler r2 object put "$RSS_R2_BUCKET/$OBJECT_KEY"                 --file "$APK_PATH"                 --remote                 --content-type application/vnd.android.package-archive
+
+            echo "RSS R2 deployment completed."
+            echo "Object: $RSS_R2_BUCKET/$OBJECT_KEY"
