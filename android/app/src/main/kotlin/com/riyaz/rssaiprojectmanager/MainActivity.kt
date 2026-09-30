@@ -25,14 +25,19 @@ private class ProjectManagerApi(private val baseUrl: String) {
     var workspaceId: String? = null
 
     private fun request(path: String, method: String, body: String? = null): String {
-        val builder = Request.Builder().url(baseUrl.trimEnd('/') + path).addHeader("Accept", "application/json")
-        token?.let { builder.addHeader("Authorization", "Bearer " + it) }
+        val builder = Request.Builder()
+            .url(baseUrl.trimEnd('/') + path)
+            .addHeader("Accept", "application/json")
+        token?.let { builder.addHeader("Authorization", "Bearer $it") }
         workspaceId?.let { builder.addHeader("X-Workspace-ID", it) }
-        if (body != null) builder.method(method, body.toRequestBody("application/json".toMediaType()))
-        else builder.method(method, null)
+        if (body != null) {
+            builder.method(method, body.toRequestBody("application/json".toMediaType()))
+        } else {
+            builder.method(method, null)
+        }
         client.newCall(builder.build()).execute().use { response ->
             val text = response.body?.string().orEmpty()
-            if (!response.isSuccessful) error("HTTP " + response.code + ": " + text.take(500))
+            if (!response.isSuccessful) error("HTTP ${response.code}: ${text.take(500)}")
             return text
         }
     }
@@ -43,23 +48,34 @@ private class ProjectManagerApi(private val baseUrl: String) {
     fun projects(): JSONArray = JSONArray(request("/api/v1/projects", "GET"))
 
     fun updateProject(id: String, name: String, repository: String?, description: String): JSONObject {
-        val body = JSONObject().put("name", name)
+        val body = JSONObject()
+            .put("name", name)
+            .put("enabled", true)
+            .put("priority", 100)
+            .put("description", description)
         if (!repository.isNullOrBlank()) body.put("repository", repository)
-        if (description.isNotBlank()) body.put("description", description)
-        return JSONObject(request("/api/v1/projects/" + id, "PATCH", body.toString()))
+        else body.put("repository", JSONObject.NULL)
+        return JSONObject(request("/api/v1/projects/$id", "PATCH", body.toString()))
     }
 
     fun createProject(id: String, name: String, repository: String?, description: String): JSONObject {
-        val body = JSONObject().put("id", id).put("name", name)
+        val body = JSONObject()
+            .put("id", id)
+            .put("name", name)
+            .put("enabled", true)
+            .put("priority", 100)
+            .put("description", description)
         if (!repository.isNullOrBlank()) body.put("repository", repository)
-        if (description.isNotBlank()) body.put("description", description)
         return JSONObject(request("/api/v1/projects", "POST", body.toString()))
     }
-    fun project(id: String): JSONObject = JSONObject(request("/api/v1/projects/" + id, "GET"))
-    fun tasks(projectId: String): JSONArray = JSONArray(request("/api/v1/tasks?project_id=" + projectId, "GET"))
+
+    fun tasks(projectId: String): JSONArray =
+        JSONArray(request("/api/v1/tasks?project_id=$projectId", "GET"))
 
     fun createTask(title: String, projectId: String, context: String): JSONObject {
-        val body = JSONObject().put("title", title).put("project_id", projectId)
+        val body = JSONObject()
+            .put("title", title)
+            .put("project_id", projectId)
         if (context.isNotBlank()) body.put("context", context)
         return JSONObject(request("/api/v1/tasks", "POST", body.toString()))
     }
@@ -67,7 +83,14 @@ private class ProjectManagerApi(private val baseUrl: String) {
     fun goAhead(): JSONObject = JSONObject(request("/api/v1/tasks/run-next-user", "POST"))
 }
 
-data class Project(val id: String, val name: String, val repository: String?, val status: String?)
+data class Project(
+    val id: String,
+    val name: String,
+    val repository: String?,
+    val status: String?,
+    val description: String?
+)
+
 data class Task(val id: String, val title: String, val status: String)
 
 class MainActivity : ComponentActivity() {
@@ -84,28 +107,44 @@ private fun ProjectManagerApp() {
     var password by remember { mutableStateOf("") }
     var signedIn by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
     val api = remember(baseUrl) { ProjectManagerApi(baseUrl) }
     val scope = rememberCoroutineScope()
+
     var projects by remember { mutableStateOf(emptyList<Project>()) }
     var selected by remember { mutableStateOf<Project?>(null) }
     var tasks by remember { mutableStateOf(emptyList<Task>()) }
+
     var taskTitle by remember { mutableStateOf("") }
     var taskContext by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
+
     var showProjectForm by remember { mutableStateOf(false) }
+    var editingProject by remember { mutableStateOf<Project?>(null) }
     var projectId by remember { mutableStateOf("") }
     var projectName by remember { mutableStateOf("") }
-    var projectRepo by remember { mutableStateOf("") }\n    var projectDescription by remember { mutableStateOf("") }\n    var editingProject by remember { mutableStateOf<Project?>(null) }
+    var projectRepo by remember { mutableStateOf("") }
+    var projectDescription by remember { mutableStateOf("") }
 
     fun loadProjects() {
         scope.launch(Dispatchers.IO) {
             try {
                 val json = api.projects()
                 projects = (0 until json.length()).map { i ->
-                    json.getJSONObject(i).let { Project(it.getString("id"), it.getString("name"), it.optString("repository").ifBlank { null }, it.optString("status").ifBlank { null }) }
+                    json.getJSONObject(i).let {
+                        Project(
+                            it.getString("id"),
+                            it.getString("name"),
+                            it.optString("repository").ifBlank { null },
+                            it.optString("status").ifBlank { null },
+                            it.optString("description").ifBlank { null }
+                        )
+                    }
                 }
                 error = null
-            } catch (e: Exception) { error = e.message }
+            } catch (e: Exception) {
+                error = e.message
+            }
         }
     }
 
@@ -114,51 +153,92 @@ private fun ProjectManagerApp() {
             try {
                 val json = api.tasks(project.id)
                 tasks = (0 until json.length()).map { i ->
-                    json.getJSONObject(i).let { Task(it.getLong("id").toString(), it.getString("title"), it.getString("status")) }
+                    json.getJSONObject(i).let {
+                        Task(
+                            it.getLong("id").toString(),
+                            it.getString("title"),
+                            it.getString("status")
+                        )
+                    }
                 }
                 error = null
-            } catch (e: Exception) { error = e.message }
+            } catch (e: Exception) {
+                error = e.message
+            }
         }
     }
 
     MaterialTheme {
         Surface(Modifier.fillMaxSize()) {
             if (!signedIn) {
-                LoginScreen(baseUrl, { baseUrl = it }, email, { email = it }, password, { password = it }, error, busy) {
+                LoginScreen(
+                    baseUrl = baseUrl,
+                    onBaseUrl = { baseUrl = it },
+                    email = email,
+                    onEmail = { email = it },
+                    password = password,
+                    onPassword = { password = it },
+                    error = error,
+                    busy = busy
+                ) {
                     busy = true
                     scope.launch(Dispatchers.IO) {
                         try {
-                            val result = api.login(email, password)
+                            val result = api.login(email.trim(), password)
                             api.token = result.getString("access_token")
+
                             val workspace = result.optJSONObject("workspace")
-                            if (workspace != null) api.workspaceId = workspace.getString("id")
-                            else {
+                            if (workspace != null) {
+                                api.workspaceId = workspace.getString("id")
+                            } else {
                                 val workspaces = result.optJSONArray("workspaces")
-                                if (workspaces != null && workspaces.length() > 0) api.workspaceId = workspaces.getJSONObject(0).getString("id")
+                                if (workspaces != null && workspaces.length() > 0) {
+                                    api.workspaceId = workspaces.getJSONObject(0).getString("id")
+                                }
                             }
-                            if (api.workspaceId.isNullOrBlank()) error("No active workspace returned by server")
-                            signedIn = true
-                            loadProjects()
-                            error = null
-                        } catch (e: Exception) { error = e.message }
-                        finally { busy = false }
+
+                            if (api.workspaceId.isNullOrBlank()) {
+                                error("No active workspace returned by server")
+                            } else {
+                                signedIn = true
+                                error = null
+                                loadProjects()
+                            }
+                        } catch (e: Exception) {
+                            error = e.message
+                        } finally {
+                            busy = false
+                        }
                     }
                 }
             } else {
                 Dashboard(
-                    projects, selected, tasks, taskTitle, { taskTitle = it }, taskContext, { taskContext = it },
-                    onSelect = { selected = it; loadTasks(it) },
+                    projects = projects,
+                    selected = selected,
+                    tasks = tasks,
+                    taskTitle = taskTitle,
+                    onTaskTitle = { taskTitle = it },
+                    taskContext = taskContext,
+                    onTaskContext = { taskContext = it },
+                    onSelect = {
+                        selected = it
+                        loadTasks(it)
+                    },
                     onCreate = {
                         val project = selected ?: return@Dashboard
                         busy = true
                         scope.launch(Dispatchers.IO) {
                             try {
-                                api.createTask(taskTitle, project.id, taskContext)
-                                taskTitle = ""; taskContext = ""
+                                api.createTask(taskTitle.trim(), project.id, taskContext)
+                                taskTitle = ""
+                                taskContext = ""
                                 loadTasks(project)
                                 error = null
-                            } catch (e: Exception) { error = e.message }
-                            finally { busy = false }
+                            } catch (e: Exception) {
+                                error = e.message
+                            } finally {
+                                busy = false
+                            }
                         }
                     },
                     onGoAhead = {
@@ -166,33 +246,75 @@ private fun ProjectManagerApp() {
                         scope.launch(Dispatchers.IO) {
                             try {
                                 val result = api.goAhead()
-                                error = "Execution: " + result.optString("status") + "  Task: " + result.optString("task_id")
+                                error = "Execution: ${result.optString("status", "unknown")}  Task: ${result.optString("task_id", "none")}"
                                 selected?.let { loadTasks(it) }
-                            } catch (e: Exception) { error = e.message }
-                            finally { busy = false }
+                            } catch (e: Exception) {
+                                error = e.message
+                            } finally {
+                                busy = false
+                            }
                         }
                     },
-                    onRefresh = { loadProjects(); selected?.let { loadTasks(it) } },
+                    onRefresh = {
+                        loadProjects()
+                        selected?.let { loadTasks(it) }
+                    },
                     busy = busy,
                     error = error,
-                    onCreateProject = { id, name, repo ->
+                    onCreateProject = { id, name, repo, description ->
                         busy = true
                         scope.launch(Dispatchers.IO) {
                             try {
-                                api.createProject(id, name, repo, "")
+                                api.createProject(id.trim(), name.trim(), repo.trim().ifBlank { null }, description)
                                 showProjectForm = false
-                                projectId = ""; projectName = ""; projectRepo = ""
+                                projectId = ""
+                                projectName = ""
+                                projectRepo = ""
+                                projectDescription = ""
                                 loadProjects()
                                 error = null
-                            } catch (e: Exception) { error = e.message }
-                            finally { busy = false }
+                            } catch (e: Exception) {
+                                error = e.message
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    },
+                    onEditProject = {
+                        editingProject = it
+                        projectName = it.name
+                        projectRepo = it.repository.orEmpty()
+                        projectDescription = it.description.orEmpty()
+                    },
+                    onUpdateProject = { p, name, repo, description ->
+                        busy = true
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                api.updateProject(p.id, name.trim(), repo.trim().ifBlank { null }, description)
+                                editingProject = null
+                                loadProjects()
+                                selected = null
+                                error = null
+                            } catch (e: Exception) {
+                                error = e.message
+                            } finally {
+                                busy = false
+                            }
                         }
                     },
                     showProjectForm = showProjectForm,
+                    onShowProjectForm = { showProjectForm = true },
                     onDismissProjectForm = { showProjectForm = false },
-                    projectId = projectId, onProjectId = { projectId = it },
-                    projectName = projectName, onProjectName = { projectName = it },
-                    projectRepo = projectRepo, onProjectRepo = { projectRepo = it },\n                    editingProject = editingProject, onDismissEdit = { editingProject = null },\n                    onUpdateProject = { p, name, repo ->\n                        busy = true\n                        scope.launch(Dispatchers.IO) {\n                            try { api.updateProject(p.id, name, repo, projectDescription); editingProject = null; loadProjects(); error = null }\n                            catch (e: Exception) { error = e.message } finally { busy = false }\n                        }\n                    }
+                    editingProject = editingProject,
+                    onDismissEdit = { editingProject = null },
+                    projectId = projectId,
+                    onProjectId = { projectId = it },
+                    projectName = projectName,
+                    onProjectName = { projectName = it },
+                    projectRepo = projectRepo,
+                    onProjectRepo = { projectRepo = it },
+                    projectDescription = projectDescription,
+                    onProjectDescription = { projectDescription = it }
                 )
             }
         }
@@ -201,38 +323,90 @@ private fun ProjectManagerApp() {
 
 @Composable
 private fun LoginScreen(
-    baseUrl: String, onBaseUrl: (String) -> Unit,
-    email: String, onEmail: (String) -> Unit,
-    password: String, onPassword: (String) -> Unit,
-    error: String?, busy: Boolean, onLogin: () -> Unit
+    baseUrl: String,
+    onBaseUrl: (String) -> Unit,
+    email: String,
+    onEmail: (String) -> Unit,
+    password: String,
+    onPassword: (String) -> Unit,
+    error: String?,
+    busy: Boolean,
+    onLogin: () -> Unit
 ) {
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+    Column(
+        Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
         Text("RSS AI Project Manager", style = MaterialTheme.typography.headlineMedium)
-        Text("Full Android control client", style = MaterialTheme.typography.bodyMedium)
+        Text("Android control client", style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.height(20.dp))
-        OutlinedTextField(baseUrl, onBaseUrl, label = { Text("Backend / RSS Core API URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(email, onEmail, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(
+            baseUrl, onBaseUrl,
+            label = { Text("RSS Core API URL") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            email, onEmail,
+            label = { Text("Email") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            password, onPassword,
+            label = { Text("Password") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
         Spacer(Modifier.height(12.dp))
-        Button(onClick = onLogin, enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+        Button(
+            onClick = onLogin,
+            enabled = !busy && email.isNotBlank() && password.isNotBlank(),
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text(if (busy) "Signing in..." else "Sign in")
         }
-        if (error != null) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 10.dp))
+        if (error != null) {
+            Text(
+                error,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 10.dp)
+            )
+        }
     }
 }
 
 @Composable
 private fun Dashboard(
-    projects: List<Project>, selected: Project?, tasks: List<Task>,
-    taskTitle: String, onTaskTitle: (String) -> Unit,
-    taskContext: String, onTaskContext: (String) -> Unit,
-    onSelect: (Project) -> Unit, onCreate: () -> Unit, onGoAhead: () -> Unit,
-    onRefresh: () -> Unit, busy: Boolean, error: String?,
-    onCreateProject: (String, String, String) -> Unit,
-    showProjectForm: Boolean, onDismissProjectForm: () -> Unit,
-    projectId: String, onProjectId: (String) -> Unit,
-    projectName: String, onProjectName: (String) -> Unit,
-    projectRepo: String, onProjectRepo: (String) -> Unit
+    projects: List<Project>,
+    selected: Project?,
+    tasks: List<Task>,
+    taskTitle: String,
+    onTaskTitle: (String) -> Unit,
+    taskContext: String,
+    onTaskContext: (String) -> Unit,
+    onSelect: (Project) -> Unit,
+    onCreate: () -> Unit,
+    onGoAhead: () -> Unit,
+    onRefresh: () -> Unit,
+    busy: Boolean,
+    error: String?,
+    onCreateProject: (String, String, String, String) -> Unit,
+    onEditProject: (Project) -> Unit,
+    onUpdateProject: (Project, String, String, String) -> Unit,
+    showProjectForm: Boolean,
+    onShowProjectForm: () -> Unit,
+    onDismissProjectForm: () -> Unit,
+    editingProject: Project?,
+    onDismissEdit: () -> Unit,
+    projectId: String,
+    onProjectId: (String) -> Unit,
+    projectName: String,
+    onProjectName: (String) -> Unit,
+    projectRepo: String,
+    onProjectRepo: (String) -> Unit,
+    projectDescription: String,
+    onProjectDescription: (String) -> Unit
 ) {
     if (editingProject != null) {
         AlertDialog(
@@ -240,15 +414,43 @@ private fun Dashboard(
             title = { Text("Edit Project") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("ID: " + editingProject.id)
-                    OutlinedTextField(projectName, onProjectName, label = { Text("Project name") }, singleLine = true)
-                    OutlinedTextField(projectRepo, onProjectRepo, label = { Text("GitHub repository") }, singleLine = true)
+                    Text("ID: ${editingProject.id}")
+                    OutlinedTextField(
+                        projectName, onProjectName,
+                        label = { Text("Project name") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        projectRepo, onProjectRepo,
+                        label = { Text("GitHub repository") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        projectDescription, onProjectDescription,
+                        label = { Text("Description") },
+                        minLines = 3
+                    )
                 }
             },
-            confirmButton = { Button(onClick = { onUpdateProject(editingProject, projectName.trim(), projectRepo.trim()) }, enabled = !busy && projectName.isNotBlank()) { Text("Save") } },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onUpdateProject(
+                            editingProject,
+                            projectName,
+                            projectRepo,
+                            projectDescription
+                        )
+                    },
+                    enabled = !busy && projectName.isNotBlank()
+                ) {
+                    Text("Save")
+                }
+            },
             dismissButton = { TextButton(onClick = onDismissEdit) { Text("Cancel") } }
         )
     }
+
     if (showProjectForm) {
         AlertDialog(
             onDismissRequest = onDismissProjectForm,
@@ -258,42 +460,121 @@ private fun Dashboard(
                     OutlinedTextField(projectId, onProjectId, label = { Text("Project ID") }, singleLine = true)
                     OutlinedTextField(projectName, onProjectName, label = { Text("Project name") }, singleLine = true)
                     OutlinedTextField(projectRepo, onProjectRepo, label = { Text("GitHub repository") }, singleLine = true)
+                    OutlinedTextField(projectDescription, onProjectDescription, label = { Text("Description") }, minLines = 3)
                 }
             },
-            confirmButton = { Button(onClick = { onCreateProject(projectId.trim(), projectName.trim(), projectRepo.trim()) }, enabled = projectId.isNotBlank() && projectName.isNotBlank() && !busy) { Text("Create") } },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onCreateProject(
+                            projectId,
+                            projectName,
+                            projectRepo,
+                            projectDescription
+                        )
+                    },
+                    enabled = !busy && projectId.isNotBlank() && projectName.isNotBlank()
+                ) {
+                    Text("Create")
+                }
+            },
             dismissButton = { TextButton(onClick = onDismissProjectForm) { Text("Cancel") } }
         )
     }
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+
+    LazyColumn(
+        Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
         item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Text("RSS Projects", style = MaterialTheme.typography.headlineSmall)
-                OutlinedButton(onClick = onRefresh, enabled = !busy) { Text("Refresh") }
-            }
-        }
-        items(projects) { project ->
-            ElevatedCard(onClick = { onSelect(project) }, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(project.name, style = MaterialTheme.typography.titleMedium)
-                    Text(project.repository ?: "Repository not configured")
-                    Text("Status: " + (project.status ?: "unknown"))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onRefresh, enabled = !busy) { Text("Refresh") }
+                    Button(onClick = onShowProjectForm, enabled = !busy) { Text("New") }
                 }
             }
         }
-        if (selected != null) item {
-            HorizontalDivider()
-            Text("Selected: " + selected.name, style = MaterialTheme.typography.titleLarge)
-            OutlinedTextField(taskTitle, onTaskTitle, label = { Text("Task / next action") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(taskContext, onTaskContext, label = { Text("Context / requirements") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onCreate, enabled = !busy && taskTitle.isNotBlank()) { Text("Create Task") }
-                Button(onClick = onGoAhead, enabled = !busy) { Text(if (busy) "Working..." else "Go Ahead") }
-            }
-            Text("Tasks", style = MaterialTheme.typography.titleMedium)
-            tasks.forEach { task ->
-                ListItem(headlineContent = { Text(task.title) }, supportingContent = { Text("Status: " + task.status) })
+
+        items(projects) { project ->
+            ElevatedCard(
+                onClick = { onSelect(project) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(project.name, style = MaterialTheme.typography.titleMedium)
+                            Text(project.repository ?: "Repository not configured")
+                            Text("Status: ${project.status ?: "unknown"}")
+                        }
+                        TextButton(onClick = { onEditProject(project) }, enabled = !busy) {
+                            Text("Edit")
+                        }
+                    }
+                    if (!project.description.isNullOrBlank()) {
+                        Text(
+                            project.description,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
             }
         }
-        if (error != null) item { Text(error, color = MaterialTheme.colorScheme.error) }
+
+        if (selected != null) {
+            item {
+                HorizontalDivider()
+                Text("Selected: ${selected.name}", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    taskTitle,
+                    onTaskTitle,
+                    label = { Text("Task / next action") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    taskContext,
+                    onTaskContext,
+                    label = { Text("Context / requirements") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onCreate,
+                        enabled = !busy && taskTitle.isNotBlank()
+                    ) { Text("Create Task") }
+                    Button(
+                        onClick = onGoAhead,
+                        enabled = !busy
+                    ) { Text(if (busy) "Working..." else "Go Ahead") }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("Tasks", style = MaterialTheme.typography.titleMedium)
+            }
+
+            items(tasks) { task ->
+                ListItem(
+                    headlineContent = { Text(task.title) },
+                    supportingContent = { Text("Status: ${task.status}") }
+                )
+            }
+        }
+
+        if (error != null) {
+            item {
+                Text(
+                    error,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
     }
 }
