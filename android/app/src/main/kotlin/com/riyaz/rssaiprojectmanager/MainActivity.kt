@@ -1,7 +1,10 @@
 package com.riyaz.rssaiprojectmanager
 
 import android.os.Bundle
+import android.content.Context
 import androidx.activity.ComponentActivity
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKeys
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -81,6 +84,8 @@ private class ProjectManagerApi(private val baseUrl: String) {
     }
 
     fun goAhead(): JSONObject = JSONObject(request("/api/v1/tasks/run-next-user", "POST"))
+
+    fun logout(): JSONObject = JSONObject(request("/auth/logout", "POST"))
 }
 
 data class Project(
@@ -102,14 +107,25 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun ProjectManagerApp() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val securePrefs = remember {
+        EncryptedSharedPreferences.create(
+            "rss_pm_session",
+            MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
+            context,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
     var baseUrl by remember { mutableStateOf("https://rsscore.cv") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var signedIn by remember { mutableStateOf(false) }
+    var workspaceId by remember { mutableStateOf(securePrefs.getString("workspace_id", null)) }
+    var signedIn by remember { mutableStateOf(securePrefs.getString("token", null) != null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
-    val api = remember(baseUrl) { ProjectManagerApi(baseUrl) }
+    val api = remember(baseUrl) { ProjectManagerApi(baseUrl).also { it.token = securePrefs.getString("token", null); it.workspaceId = workspaceId } }
     val scope = rememberCoroutineScope()
 
     var projects by remember { mutableStateOf(emptyList<Project>()) }
@@ -186,6 +202,7 @@ private fun ProjectManagerApp() {
                         try {
                             val result = api.login(email.trim(), password)
                             api.token = result.getString("access_token")
+                            securePrefs.edit().putString("token", api.token).apply()
 
                             val workspace = result.optJSONObject("workspace")
                             if (workspace != null) {
@@ -200,6 +217,8 @@ private fun ProjectManagerApp() {
                             if (api.workspaceId.isNullOrBlank()) {
                                 error("No active workspace returned by server")
                             } else {
+                                workspaceId = api.workspaceId
+                                securePrefs.edit().putString("workspace_id", api.workspaceId).apply()
                                 signedIn = true
                                 error = null
                                 loadProjects()
@@ -253,6 +272,21 @@ private fun ProjectManagerApp() {
                             } finally {
                                 busy = false
                             }
+                        }
+                    },
+                    onLogout = {
+                        busy = true
+                        scope.launch(Dispatchers.IO) {
+                            try { api.logout() } catch (_: Exception) { /* local session is still cleared */ }
+                            securePrefs.edit().clear().apply()
+                            api.token = null
+                            api.workspaceId = null
+                            workspaceId = null
+                            signedIn = false
+                            selected = null
+                            projects = emptyList()
+                            tasks = emptyList()
+                            busy = false
                         }
                     },
                     onRefresh = {
@@ -388,6 +422,7 @@ private fun Dashboard(
     onSelect: (Project) -> Unit,
     onCreate: () -> Unit,
     onGoAhead: () -> Unit,
+    onLogout: () -> Unit,
     onRefresh: () -> Unit,
     busy: Boolean,
     error: String?,
@@ -494,6 +529,7 @@ private fun Dashboard(
                 Text("RSS Projects", style = MaterialTheme.typography.headlineSmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = onRefresh, enabled = !busy) { Text("Refresh") }
+                    OutlinedButton(onClick = onLogout, enabled = !busy) { Text("Logout") }
                     Button(onClick = onShowProjectForm, enabled = !busy) { Text("New") }
                 }
             }
