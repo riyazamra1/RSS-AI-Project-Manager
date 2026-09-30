@@ -27,4 +27,4 @@ def health(): return {"status":"ok","service":"rss-ai-project-manager","executio
 @app.get("/api/v1")
 def api_info(): return {"service":"RSS AI Project Manager API","version":"v1","execution_path":"rss-core-cloudflare-ray"}
 
-app.mount("/", StaticFiles(directory="web", html=True), name="web")
+app.mount("/", StaticFiles(directory="/app/web", html=True), name="web")
