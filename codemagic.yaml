@@ -2,7 +2,6 @@ workflows:
   rss-ai-project-manager-android:
     name: RSS AI Project Manager Android
     max_build_duration: 60
-    # mac_mini_m2 is available without the billing-only Linux X2/X4 machines.
     instance_type: mac_mini_m2
 
     triggering:
@@ -54,19 +53,17 @@ workflows:
           success: true
           failure: true
 
-      # Automatic Firebase App Distribution is enabled when the following
-      # Codemagic secret variables are configured:
-      # FIREBASE_SERVICE_ACCOUNT = Firebase service-account JSON
-      # FIREBASE_ANDROID_APP_ID = Firebase Android App ID
-      # FIREBASE_TESTER_GROUPS = comma-separated tester group aliases
+      # Firebase App Distribution uses the debug APK because Android signs
+      # the debug variant automatically. Configure the three secret variables
+      # in Codemagic to activate the deployment.
       scripts:
-        - name: Deploy APK to Firebase App Distribution
+        - name: Deploy signed APK to Firebase App Distribution
           script: |
             set -e
 
             if [ -z "$FIREBASE_SERVICE_ACCOUNT" ] || [ -z "$FIREBASE_ANDROID_APP_ID" ]; then
               echo "Firebase deployment credentials are not configured in Codemagic."
-              echo "Build artifacts remain available; deployment step skipped."
+              echo "APK artifacts were built successfully; deployment skipped."
               exit 0
             fi
 
@@ -74,20 +71,19 @@ workflows:
             printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$CREDENTIALS_FILE"
             export GOOGLE_APPLICATION_CREDENTIALS="$CREDENTIALS_FILE"
 
-            APK_PATH="$CM_BUILD_DIR/android/app/build/outputs/apk/release/app-release.apk"
-            if [ ! -f "$APK_PATH" ]; then
-              APK_PATH="$CM_BUILD_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
-            fi
+            APK_PATH="$CM_BUILD_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+            test -f "$APK_PATH"
 
             RELEASE_NOTES="RSS AI Project Manager build $BUILD_NUMBER"
-            GROUP_ARGS=""
             if [ -n "$FIREBASE_TESTER_GROUPS" ]; then
-              GROUP_ARGS="--groups $FIREBASE_TESTER_GROUPS"
+              firebase appdistribution:distribute "$APK_PATH" \
+                --app "$FIREBASE_ANDROID_APP_ID" \
+                --groups "$FIREBASE_TESTER_GROUPS" \
+                --release-notes "$RELEASE_NOTES"
+            else
+              firebase appdistribution:distribute "$APK_PATH" \
+                --app "$FIREBASE_ANDROID_APP_ID" \
+                --release-notes "$RELEASE_NOTES"
             fi
-
-            firebase appdistribution:distribute "$APK_PATH" \
-              --app "$FIREBASE_ANDROID_APP_ID" \
-              --release-notes "$RELEASE_NOTES" \
-              $GROUP_ARGS
 
             rm -f "$CREDENTIALS_FILE"
