@@ -1,0 +1,49 @@
+workflows:
+  rss-ai-project-manager-android:
+    name: RSS AI Project Manager Android
+    max_build_duration: 60
+    instance_type: linux_x2
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+
+    environment:
+      vars:
+        PACKAGE_NAME: "com.riyaz.rssaiprojectmanager"
+
+    scripts:
+      - name: Set Android SDK location
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
+
+      - name: Verify Android project
+        script: |
+          cd "$CM_BUILD_DIR/android"
+          ./gradlew --version
+
+      - name: Build debug APK
+        script: |
+          cd "$CM_BUILD_DIR/android"
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Build release APK
+        script: |
+          cd "$CM_BUILD_DIR/android"
+          ./gradlew --no-daemon assembleRelease
+
+    artifacts:
+      - android/app/build/outputs/apk/debug/*.apk
+      - android/app/build/outputs/apk/release/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - rsscctvsolution@gmail.com
+        notify:
+          success: true
+          failure: true
