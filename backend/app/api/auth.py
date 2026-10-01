@@ -7,7 +7,7 @@ import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from ..core.config import settings
 from ..db import get_connection
@@ -203,7 +203,7 @@ async def register(item: RegisterRequest):
         pw = hash_password(item.password)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
-    request_id = secrets.token_hex(16)
+    request_id = str(uuid4())
     with get_connection() as conn:
         if conn.execute("SELECT 1 FROM users WHERE lower(email)=lower(%s)", (item.email,)).fetchone():
             raise HTTPException(409, "Account already exists")
