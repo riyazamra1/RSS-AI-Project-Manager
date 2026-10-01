@@ -190,7 +190,7 @@ def register(item: RegisterRequest):
             (ws["id"], user["id"]),
         )
         conn.execute(
-            "INSERT INTO service_entitlements(workspace_id,service_key,enabled) VALUES(%s,'project_manager',TRUE)",
+            "INSERT INTO service_entitlements(workspace_id,service_key,enabled) VALUES(%s,'project_manager',FALSE)",
             (ws["id"],),
         )
         for service in ("rss_core", "rss_kit", "ray"):
