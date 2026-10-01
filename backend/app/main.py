@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from app.api.admin import router as admin_router
 from app.api.ai import router as ai_router
 from app.api.auto_chat import router as auto_chat_router
 from app.api.auth import router as auth_router
@@ -19,7 +20,7 @@ async def lifespan(app):
     finally: await scheduler.stop()
 
 app=FastAPI(title="RSS AI Project Manager",version="0.9.0",lifespan=lifespan)
-app.include_router(auth_router); app.include_router(projects_router,prefix="/api/v1"); app.include_router(project_discovery_router); app.include_router(productivity_router,prefix="/api/v1"); app.include_router(memory_router,prefix="/api/v1"); app.include_router(conversations_router,prefix="/api/v1"); app.include_router(ai_router,prefix="/api/v1"); app.include_router(auto_chat_router,prefix="/api/v1"); app.include_router(tasks_router,prefix="/api/v1")
+app.include_router(auth_router); app.include_router(admin_router); app.include_router(projects_router,prefix="/api/v1"); app.include_router(project_discovery_router); app.include_router(productivity_router,prefix="/api/v1"); app.include_router(memory_router,prefix="/api/v1"); app.include_router(conversations_router,prefix="/api/v1"); app.include_router(ai_router,prefix="/api/v1"); app.include_router(auto_chat_router,prefix="/api/v1"); app.include_router(tasks_router,prefix="/api/v1")
 
 @app.get("/health")
 def health(): return {"status":"ok","service":"rss-ai-project-manager","execution":"rss-core-cloudflare-ray"}
