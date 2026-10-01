@@ -7,10 +7,11 @@ import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
+from uuid import UUID
 
 from ..core.config import settings
 from ..db import get_connection
-from ..security import create_session, hash_password, require_auth, revoke_session, user_workspaces, verify_password
+from ..security import create_session, hash_password, require_auth, require_platform_admin, revoke_session, user_workspaces, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -208,7 +209,7 @@ def register(item: RegisterRequest):
 def login(item: LoginRequest):
     with get_connection() as conn:
         user = conn.execute(
-            """SELECT id,email,full_name,email_verified,password_hash
+            """SELECT id,email,full_name,email_verified,password_hash,approval_status
                FROM users WHERE lower(email)=lower(%s)""",
             (item.email,),
         ).fetchone()
