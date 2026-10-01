@@ -208,6 +208,12 @@ def login(item: LoginRequest):
         ).fetchone()
     if not user or not verify_password(item.password, user["password_hash"]):
         raise HTTPException(401, "Invalid email or password")
+    if user["approval_status"] == "pending":
+        raise HTTPException(403, "Account is awaiting RSS AI Project Manager administrator approval")
+    if user["approval_status"] == "rejected":
+        raise HTTPException(403, "This RSS AI Project Manager account was rejected")
+    if user["approval_status"] == "suspended":
+        raise HTTPException(403, "This RSS AI Project Manager account is suspended")
     token, expires = create_session(str(user["id"]))
     data = dict(user)
     data.pop("password_hash", None)
