@@ -148,7 +148,7 @@ def _find_or_create_social_user(provider: str, subject: str, email: str | None, 
             (ws["id"], user["id"]),
         )
         conn.execute(
-            "INSERT INTO service_entitlements(workspace_id,service_key,enabled) VALUES(%s,'project_manager',TRUE)",
+            "INSERT INTO service_entitlements(workspace_id,service_key,enabled) VALUES(%s,'project_manager',FALSE)",
             (ws["id"],),
         )
         for service in ("rss_core", "rss_kit", "ray"):
@@ -160,7 +160,7 @@ def _find_or_create_social_user(provider: str, subject: str, email: str | None, 
         return user["id"], user["email"], user["full_name"]
 
 
-@router.post("/register", status_code=201)
+@router.post("/register", status_code=202)
 def register(item: RegisterRequest):
     try:
         pw = hash_password(item.password)
@@ -172,9 +172,9 @@ def register(item: RegisterRequest):
         ).fetchone():
             raise HTTPException(409, "Account already exists")
         user = conn.execute(
-            """INSERT INTO users(email,full_name,password_hash)
-               VALUES(lower(%s),%s,%s)
-               RETURNING id,email,full_name,email_verified""",
+            """INSERT INTO users(email,full_name,password_hash,approval_status)
+               VALUES(lower(%s),%s,%s,'pending')
+               RETURNING id,email,full_name,email_verified,approval_status""",
             (item.email, item.full_name.strip(), pw),
         ).fetchone()
         ws = conn.execute(
@@ -195,14 +195,7 @@ def register(item: RegisterRequest):
                 (ws["id"], service),
             )
         conn.commit()
-    token, expires = create_session(str(user["id"]))
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "expires_at": expires,
-        "user": dict(user),
-        "workspace": dict(ws),
-    }
+    return {"status": "pending_approval", "message": "Account created. An RSS AI Project Manager administrator must approve this account before login.", "user": dict(user)}
 
 
 @router.post("/login")
