@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     max_ray_response_bytes: int = 1048576
     github_discovery_enabled: bool = False
     github_allowed_repositories: str = "riyazamra1/RSS-AI-Project-Manager"
+    # RSS AI Project Manager administrator. This is intentionally separate
+    # from RSS Core authentication and is used only for account approval.
+    platform_admin_email: str = ""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
