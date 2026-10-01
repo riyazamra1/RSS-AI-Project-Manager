@@ -27,6 +27,39 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=200)
 
+async def _send_template(to: str, template_id: str, variables: dict[str, str]) -> None:
+    if not settings.resend_api_key or not template_id:
+        raise RuntimeError("Resend template email service is not configured")
+    payload = {
+        "from": settings.resend_from_email,
+        "to": [to],
+        "template": {"id": template_id, "variables": variables},
+    }
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {settings.resend_api_key}", "Content-Type": "application/json"},
+            json=payload,
+        )
+    if response.status_code >= 300:
+        raise RuntimeError(f"Resend template send failed: {response.status_code}")
+
+def _app_url(path: str = "") -> str:
+    return settings.app_base_url.rstrip("/") + path
+
+async def _submit_to_rss_core(user_id: str, request_id: str, email: str, full_name: str) -> None:
+    url = settings.rss_core_approval_url.rstrip("/") + "/api/v1/internal/project-manager/registration-requests"
+    if not settings.rss_core_service_token or not settings.rss_core_approval_url:
+        raise RuntimeError("RSS Core approval bridge is not configured")
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(
+            url,
+            headers={"Authorization": f"Bearer {settings.rss_core_service_token}", "Content-Type": "application/json"},
+            json={"request_id": request_id, "user_id": user_id, "email": email, "name": full_name},
+        )
+    if response.status_code >= 300:
+        raise RuntimeError(f"RSS Core approval request failed: {response.status_code}")
+
 
 def _oauth_config(provider: str) -> tuple[str, str, str]:
     if provider == "google":
@@ -165,41 +198,69 @@ def _find_or_create_social_user(provider: str, subject: str, email: str | None, 
 
 
 @router.post("/register", status_code=202)
-def register(item: RegisterRequest):
+async def register(item: RegisterRequest):
     try:
         pw = hash_password(item.password)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
+    request_id = secrets.token_hex(16)
     with get_connection() as conn:
-        if conn.execute(
-            "SELECT 1 FROM users WHERE lower(email)=lower(%s)", (item.email,)
-        ).fetchone():
+        if conn.execute("SELECT 1 FROM users WHERE lower(email)=lower(%s)", (item.email,)).fetchone():
             raise HTTPException(409, "Account already exists")
         user = conn.execute(
-            """INSERT INTO users(email,full_name,password_hash,approval_status)
-               VALUES(lower(%s),%s,%s,'pending')
-               RETURNING id,email,full_name,email_verified,approval_status""",
-            (item.email, item.full_name.strip(), pw),
+            """INSERT INTO users(email,full_name,password_hash,approval_status,approval_request_id)
+               VALUES(lower(%s),%s,%s,'pending',%s)
+               RETURNING id,email,full_name,email_verified,approval_status,approval_request_id""",
+            (item.email, item.full_name.strip(), pw, request_id),
         ).fetchone()
         ws = conn.execute(
             "INSERT INTO workspaces(name,owner_user_id) VALUES(%s,%s) RETURNING id,name",
             (item.workspace_name.strip(), user["id"]),
         ).fetchone()
-        conn.execute(
-            "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES(%s,%s,'owner')",
-            (ws["id"], user["id"]),
-        )
-        conn.execute(
-            "INSERT INTO service_entitlements(workspace_id,service_key,enabled) VALUES(%s,'project_manager',FALSE)",
-            (ws["id"],),
-        )
+        conn.execute("INSERT INTO workspace_members(workspace_id,user_id,role) VALUES(%s,%s,'owner')", (ws["id"], user["id"]))
+        conn.execute("INSERT INTO service_entitlements(workspace_id,service_key,enabled) VALUES(%s,'project_manager',FALSE)", (ws["id"],))
         for service in ("rss_core", "rss_kit", "ray"):
-            conn.execute(
-                "INSERT INTO service_entitlements(workspace_id,service_key,enabled) VALUES(%s,%s,FALSE)",
-                (ws["id"], service),
-            )
+            conn.execute("INSERT INTO service_entitlements(workspace_id,service_key,enabled) VALUES(%s,%s,FALSE)", (ws["id"], service))
+        verification_token = secrets.token_urlsafe(32)
+        conn.execute(
+            "INSERT INTO email_verifications(user_id,token_hash,expires_at) VALUES(%s,%s,%s)",
+            (user["id"], hashlib.sha256(verification_token.encode()).hexdigest(), datetime.now(timezone.utc) + timedelta(hours=24)),
+        )
         conn.commit()
-    return {"status": "pending_approval", "message": "Account created. An RSS AI Project Manager administrator must approve this account before login.", "user": dict(user)}
+    verify_url = _app_url("/auth/verify-email?token=" + quote(verification_token))
+    try:
+        await _send_template(item.email, settings.resend_verify_template_id, {"USER_NAME": item.full_name.strip(), "VERIFY_URL": verify_url})
+    except Exception as exc:
+        with get_connection() as conn:
+            conn.execute("DELETE FROM users WHERE id=%s", (user["id"],))
+            conn.commit()
+        raise HTTPException(503, "Verification email could not be sent. Please try again.") from exc
+    return {
+        "status": "email_verification_required",
+        "message": "Account created. Check your email and verify it. After verification, RSS Core will receive the approval request.",
+        "user": {"id": str(user["id"]), "email": user["email"], "full_name": user["full_name"]},
+    }
+
+@router.get("/verify-email")
+async def verify_email(token: str):
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT u.id,u.email,u.full_name,u.approval_status,u.approval_request_id
+               FROM email_verifications ev JOIN users u ON u.id=ev.user_id
+               WHERE ev.token_hash=%s AND ev.expires_at>NOW() AND ev.verified_at IS NULL""",
+            (token_hash,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(400, "Verification link is invalid or expired")
+        conn.execute("UPDATE email_verifications SET verified_at=NOW() WHERE token_hash=%s", (token_hash,))
+        conn.execute("UPDATE users SET email_verified=TRUE,email_verified_at=NOW(),updated_at=NOW() WHERE id=%s", (row["id"],))
+        conn.commit()
+    try:
+        await _submit_to_rss_core(str(row["id"]), str(row["approval_request_id"]), row["email"], row["full_name"])
+    except Exception as exc:
+        raise HTTPException(502, "Email verified, but the RSS Core approval request could not be submitted. Please retry verification later.") from exc
+    return {"verified": True, "status": "pending_approval", "message": "Email verified. Your approval request has been sent to RSS Core."}
 
 
 @router.post("/login")
