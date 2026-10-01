@@ -44,14 +44,24 @@ def require_auth(authorization: str | None = Header(default=None)) -> dict:
     token = authorization[7:].strip()
     with get_connection() as conn:
         row = conn.execute(
-            """SELECT u.id,u.email,u.full_name,u.email_verified,s.id session_id
+            """SELECT u.id,u.email,u.full_name,u.email_verified,u.approval_status,s.id session_id
                FROM sessions s JOIN users u ON u.id=s.user_id
                WHERE s.token_hash=%s AND s.revoked_at IS NULL AND s.expires_at>NOW()""",
             (token_hash(token),),
         ).fetchone()
     if not row:
         raise HTTPException(401, "Invalid or expired session")
+    if row["approval_status"] != "approved":
+        raise HTTPException(403, "RSS AI Project Manager account is not approved")
     return dict(row)
+
+def require_platform_admin(user: dict = Depends(require_auth)) -> dict:
+    configured = settings.platform_admin_email.strip().lower()
+    if not configured:
+        raise HTTPException(503, "Project Manager platform admin is not configured")
+    if user.get("email", "").strip().lower() != configured:
+        raise HTTPException(403, "Project Manager administrator access required")
+    return user
 
 def workspace_access(user: dict, workspace_id: str, minimum_role: str = "viewer"):
     levels = {"viewer": 1, "member": 2, "developer": 3, "manager": 4, "admin": 5, "owner": 6}
