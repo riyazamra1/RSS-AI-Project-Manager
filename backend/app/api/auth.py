@@ -273,6 +273,8 @@ def login(item: LoginRequest):
         ).fetchone()
     if not user or not verify_password(item.password, user["password_hash"]):
         raise HTTPException(401, "Invalid email or password")
+    if not user["email_verified"]:
+        raise HTTPException(403, "Please verify your email before signing in")
     if user["approval_status"] == "pending":
         raise HTTPException(403, "Account is awaiting RSS AI Project Manager administrator approval")
     if user["approval_status"] == "rejected":
