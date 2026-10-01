@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     # RSS AI Project Manager administrator. This is intentionally separate
     # from RSS Core authentication and is used only for account approval.
     platform_admin_email: str = ""
+    rss_core_approval_url: str = ""
+    rss_core_service_token: str = ""
+    app_base_url: str = ""
+    resend_api_key: str = ""
+    resend_from_email: str = "Razeen Secure Solution <no-reply@rssapps.cv>"
+    resend_verify_template_id: str = "d4a970b2-7756-4a8c-b418-fac4ef215618"
+    resend_approval_template_id: str = "752d16c6-2f2a-4d45-8ff2-40f5f876dc14"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
