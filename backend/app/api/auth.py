@@ -1,7 +1,7 @@
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -253,13 +253,14 @@ async def verify_email(token: str):
         ).fetchone()
         if not row:
             raise HTTPException(400, "Verification link is invalid or expired")
-        conn.execute("UPDATE email_verifications SET verified_at=NOW() WHERE token_hash=%s", (token_hash,))
-        conn.execute("UPDATE users SET email_verified=TRUE,email_verified_at=NOW(),updated_at=NOW() WHERE id=%s", (row["id"],))
-        conn.commit()
     try:
         await _submit_to_rss_core(str(row["id"]), str(row["approval_request_id"]), row["email"], row["full_name"])
     except Exception as exc:
-        raise HTTPException(502, "Email verified, but the RSS Core approval request could not be submitted. Please retry verification later.") from exc
+        raise HTTPException(502, "Email verification is valid, but the RSS Core approval request could not be submitted. Please retry using the same verification link later.") from exc
+    with get_connection() as conn:
+        conn.execute("UPDATE email_verifications SET verified_at=NOW() WHERE token_hash=%s", (token_hash,))
+        conn.execute("UPDATE users SET email_verified=TRUE,email_verified_at=NOW(),updated_at=NOW() WHERE id=%s", (row["id"],))
+        conn.commit()
     return {"verified": True, "status": "pending_approval", "message": "Email verified. Your approval request has been sent to RSS Core."}
 
 
