@@ -96,6 +96,10 @@ def _issue_login(user_id, provider: str, provider_subject: str, provider_email: 
                 (user_id, provider, provider_subject, provider_email),
             )
         conn.commit()
+    with get_connection() as conn:
+        approval = conn.execute("SELECT approval_status FROM users WHERE id=%s", (user_id,)).fetchone()
+    if not approval or approval["approval_status"] != "approved":
+        raise HTTPException(403, "RSS AI Project Manager account is awaiting administrator approval")
     token, expires = create_session(str(user_id))
     return {
         "access_token": token,
@@ -120,7 +124,7 @@ def _find_or_create_social_user(provider: str, subject: str, email: str | None, 
 
         if email:
             user = conn.execute(
-                "SELECT id,email,full_name FROM users WHERE lower(email)=lower(%s)",
+                "SELECT id,email,full_name,approval_status FROM users WHERE lower(email)=lower(%s)",
                 (email,),
             ).fetchone()
             if user:
@@ -134,8 +138,8 @@ def _find_or_create_social_user(provider: str, subject: str, email: str | None, 
                 return user["id"], user["email"], user["full_name"]
 
         user = conn.execute(
-            """INSERT INTO users(email,full_name,password_hash,email_verified)
-               VALUES(%s,%s,NULL,TRUE)
+            """INSERT INTO users(email,full_name,password_hash,email_verified,approval_status)
+               VALUES(%s,%s,NULL,TRUE,'pending')
                RETURNING id,email,full_name""",
             (email or f"{provider}_{subject}@oauth.invalid", name.strip() or "Customer"),
         ).fetchone()
