@@ -27,10 +27,26 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
 
+      - name: Start PostgreSQL
+        run: |
+          docker run -d --name rss-pm-db \
+            -e POSTGRES_USER=rss_manager \
+            -e POSTGRES_PASSWORD=rss_manager \
+            -e POSTGRES_DB=rss_project_manager \
+            -p 127.0.0.1:15432:5432 \
+            postgres:16-alpine
+          for i in $(seq 1 30); do
+            if docker exec rss-pm-db pg_isready -U rss_manager -d rss_project_manager; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+
       - name: Start API container
         run: |
           docker run -d --name rss-pm-api \
+            --link rss-pm-db:postgres \
             -p 127.0.0.1:18000:8000 \
+            -e DATABASE_URL=postgresql://rss_manager:rss_manager@postgres:5432/rss_project_manager \
             -e RAY_EXECUTE_TASKS=false \
             -e AUTO_CHAT_SCHEDULER_ENABLED=false \
             rss-ai-project-manager:ci
@@ -66,6 +82,8 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: docker rm -f rss-pm-api 2>/dev/null || true
+        run: |
+          docker rm -f rss-pm-api 2>/dev/null || true
+          docker rm -f rss-pm-db 2>/dev/null || true
 
 # CI verification workflow is intentionally triggered on changes to this workflow.
