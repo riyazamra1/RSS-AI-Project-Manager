@@ -125,7 +125,7 @@ private fun ProjectManagerApp() {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
     }
-    var baseUrl by remember { mutableStateOf("https://pm.rssapps.cv") }    var email by remember { mutableStateOf("") }
+    var baseUrl by remember { mutableStateOf("https://pm.rssapps.cv") }\n    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var workspaceId by remember { mutableStateOf(securePrefs.getString("workspace_id", null)) }
     var signedIn by remember { mutableStateOf(securePrefs.getString("token", null) != null) }
