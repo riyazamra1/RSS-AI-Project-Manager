@@ -125,7 +125,8 @@ private fun ProjectManagerApp() {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
     }
-    var baseUrl by remember { mutableStateOf("https://pm.rssapps.cv") }\n    var email by remember { mutableStateOf("") }
+    var baseUrl by remember { mutableStateOf("https://pm.rssapps.cv") }
+    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var workspaceId by remember { mutableStateOf(securePrefs.getString("workspace_id", null)) }
     var signedIn by remember { mutableStateOf(securePrefs.getString("token", null) != null) }
@@ -134,7 +135,8 @@ private fun ProjectManagerApp() {
     var registerName by remember { mutableStateOf("") }
     var registerEmail by remember { mutableStateOf("") }
     var registerPassword by remember { mutableStateOf("") }
-    var registerConfirm by remember { mutableStateOf("") }\n    var registerWorkspace by remember { mutableStateOf("My RSS Workspace") }
+    var registerConfirm by remember { mutableStateOf("") }
+    var registerWorkspace by remember { mutableStateOf("My RSS Workspace") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
