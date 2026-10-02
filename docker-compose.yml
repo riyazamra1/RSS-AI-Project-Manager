@@ -32,6 +32,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      default: {}
+      rss-ray-net:
+        aliases:
+          - rss-ai-project-manager-api
+          - pm-api
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()"]
       interval: 30s
@@ -72,6 +78,11 @@ services:
     depends_on:
       api:
         condition: service_healthy
+
+networks:
+  rss-ray-net:
+    external: true
+    name: rss-ray-net
 
 volumes:
   rss_pm_postgres_data:
