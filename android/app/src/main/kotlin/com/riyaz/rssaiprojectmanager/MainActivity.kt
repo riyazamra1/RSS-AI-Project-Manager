@@ -255,6 +255,7 @@ private fun ProjectManagerApp() {
                             busy = false
                         }
                     }
+                }
                 )
             } else {
                 RegisterScreen(
