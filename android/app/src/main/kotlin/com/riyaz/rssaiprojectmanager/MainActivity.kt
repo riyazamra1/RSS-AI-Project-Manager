@@ -256,7 +256,6 @@ private fun ProjectManagerApp() {
                         }
                     }
                 }
-                }
             } else {
                 RegisterScreen(
                         workspace = registerWorkspace, onWorkspace = { registerWorkspace = it },
