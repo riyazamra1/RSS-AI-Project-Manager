@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -266,22 +267,31 @@ private fun ProjectManagerApp() {
                         error = error, busy = busy,
                         onBackToLogin = { authMode = "login"; error = null }
                     ) {
-                        if (registerPassword != registerConfirm) {
-                            error = "Passwords do not match"
-                        } else {
-                            busy = true
-                            scope.launch(Dispatchers.IO) {
-                                try {
-                                    val result = api.register(registerName.trim(), registerEmail.trim(), registerPassword, registerWorkspace.trim())
+                        val name = registerName.trim()
+                        val mail = registerEmail.trim()
+                        val workspace = registerWorkspace.trim()
+                        when {
+                            name.isBlank() -> error = "Enter your full name."
+                            mail.isBlank() -> error = "Enter your email address."
+                            !mail.contains("@") -> error = "Enter a valid email address."
+                            registerPassword.length < 12 -> error = "Password must be at least 12 characters."
+                            registerPassword != registerConfirm -> error = "Passwords do not match."
+                            workspace.isBlank() -> error = "Enter a workspace name."
+                            else -> {
+                                busy = true
+                                scope.launch(Dispatchers.IO) {
+                                    try {
+                                        val result = api.register(name, mail, registerPassword, workspace)
                                     error = result.optString("message", "Account request submitted. Please wait for administrator approval before signing in.")
                                     email = registerEmail.trim()
                                     password = ""
                                     registerPassword = ""
                                     registerConfirm = ""
                                     authMode = "login"
-                                } catch (e: Exception) {
-                                    error = e.message
-                                } finally { busy = false }
+                                    } catch (e: Exception) {
+                                        error = e.message
+                                    } finally { busy = false }
+                                }
                             }
                         }
                     }
@@ -415,7 +425,7 @@ private fun AuthShell(title: String, subtitle: String, content: @Composable Colu
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(12.dp))
-            AsyncImage(model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png", contentDescription = "RSS AI Project Manager logo", modifier = Modifier.size(108.dp))
+            AsyncImage(model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png", contentDescription = "RSS AI Project Manager logo", modifier = Modifier.size(width = 180.dp, height = 110.dp), contentScale = ContentScale.Fit)
             Spacer(Modifier.height(18.dp))
             Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
             Spacer(Modifier.height(6.dp))
@@ -475,7 +485,7 @@ private fun RegisterScreen(
         OutlinedTextField(email, onEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
         OutlinedTextField(confirm, onConfirm, label = { Text("Confirm password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
-        Button(onClick = onRegister, enabled = !busy && name.isNotBlank() && email.isNotBlank() && password.isNotBlank() && confirm.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Submitting..." else "Request account") }
+        Button(onClick = onRegister, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Submitting..." else "Request account") }
         TextButton(onClick = onBackToLogin, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Back to sign in") }
         if (error != null) Text(error, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
@@ -600,7 +610,7 @@ private fun Dashboard(
                     AsyncImage(
                         model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png",
                         contentDescription = "RSS AI Project Manager logo",
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier.size(56.dp), contentScale = ContentScale.Fit
                     )
                     Spacer(Modifier.width(10.dp))
                     Text("RSS Projects", style = MaterialTheme.typography.headlineSmall)
