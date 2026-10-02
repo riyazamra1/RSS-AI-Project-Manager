@@ -53,8 +53,8 @@ private class ProjectManagerApi(private val baseUrl: String) {
     fun login(email: String, password: String): JSONObject =
         JSONObject(request("/auth/login", "POST", JSONObject().put("email", email).put("password", password).toString()))
 
-    fun register(name: String, email: String, password: String): JSONObject =
-        JSONObject(request("/auth/register", "POST", JSONObject().put("name", name).put("email", email).put("password", password).toString()))
+    fun register(name: String, email: String, password: String, workspaceName: String): JSONObject =
+        JSONObject(request("/auth/register", "POST", JSONObject().put("full_name", name).put("email", email).put("password", password).put("workspace_name", workspaceName).toString()))
 
     fun projects(): JSONArray = JSONArray(request("/api/v1/projects", "GET"))
 
@@ -125,7 +125,7 @@ private fun ProjectManagerApp() {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
     }
-    var baseUrl by remember { mutableStateOf("https://rsscore.cv") }    var email by remember { mutableStateOf("") }
+    var baseUrl by remember { mutableStateOf("https://pm.rssapps.cv") }    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var workspaceId by remember { mutableStateOf(securePrefs.getString("workspace_id", null)) }
     var signedIn by remember { mutableStateOf(securePrefs.getString("token", null) != null) }
@@ -134,7 +134,7 @@ private fun ProjectManagerApp() {
     var registerName by remember { mutableStateOf("") }
     var registerEmail by remember { mutableStateOf("") }
     var registerPassword by remember { mutableStateOf("") }
-    var registerConfirm by remember { mutableStateOf("") }
+    var registerConfirm by remember { mutableStateOf("") }\n    var registerWorkspace by remember { mutableStateOf("My RSS Workspace") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
@@ -268,7 +268,7 @@ private fun ProjectManagerApp() {
                             busy = true
                             scope.launch(Dispatchers.IO) {
                                 try {
-                                    val result = api.register(registerName.trim(), registerEmail.trim(), registerPassword)
+                                    val result = api.register(registerName.trim(), registerEmail.trim(), registerPassword, registerWorkspace.trim())
                                     error = result.optString("message", "Account request submitted. Please wait for administrator approval before signing in.")
                                     email = registerEmail.trim()
                                     password = ""
@@ -446,7 +446,7 @@ private fun LoginScreen(
     onCreateAccount: () -> Unit, onLogin: () -> Unit
 ) {
     AuthShell("Welcome back", "Sign in to continue to your RSS workspace.") {
-        OutlinedTextField(baseUrl, onBaseUrl, label = { Text("RSS Core API URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(baseUrl, onBaseUrl, label = { Text("Project Manager API URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(email, onEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
         Button(onClick = onLogin, enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Signing in..." else "Sign in") }
