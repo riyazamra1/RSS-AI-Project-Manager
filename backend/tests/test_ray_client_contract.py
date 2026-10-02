@@ -83,17 +83,21 @@ class RayClientContractTests(unittest.TestCase):
         self.assertEqual(captured["payload"]["capabilities"], ["code"])
 
     def test_execute_tolerates_worker_404_before_claim(self):
-        responses = iter([
-            RayUnavailable("RSS Core RAY endpoint unavailable (HTTP 404)"),
+        status_responses = iter([
             {"status": "completed", "stdout": "worker done"},
         ])
         calls = []
+        first_status_check = True
 
         def request(method, path, payload=None):
+            nonlocal first_status_check
             calls.append((method, path))
             if method == "POST":
                 return {"queued": True, "task": {"id": "ray-queued-1"}}
-            return next(responses)
+            if first_status_check:
+                first_status_check = False
+                raise RayUnavailable("RSS Core RAY endpoint unavailable (HTTP 404)")
+            return next(status_responses)
 
         self.client._request = request
         self.client.poll_seconds = 0
