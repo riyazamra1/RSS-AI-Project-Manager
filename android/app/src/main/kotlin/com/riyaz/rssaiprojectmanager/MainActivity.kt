@@ -466,6 +466,7 @@ private fun RegisterScreen(
 ) {
     AuthShell("Create your RSS account", "Submit your account request. An administrator must approve it before you can sign in.") {
         OutlinedTextField(name, onName, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(registerWorkspace, { registerWorkspace = it }, label = { Text("Workspace name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(email, onEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
         OutlinedTextField(confirm, onConfirm, label = { Text("Confirm password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
