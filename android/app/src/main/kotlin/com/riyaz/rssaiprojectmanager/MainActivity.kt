@@ -15,6 +15,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -405,23 +407,32 @@ private fun ProjectManagerApp() {
 }
 
 @Composable
+private fun AuthShell(title: String, subtitle: String, content: @Composable ColumnScope.() -> Unit) {
+    Surface(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Spacer(Modifier.height(12.dp))
+            AsyncImage(model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png", contentDescription = "RSS AI Project Manager logo", modifier = Modifier.size(108.dp))
+            Spacer(Modifier.height(18.dp))
+            Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(6.dp))
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(24.dp))
+            Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+                Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+            }
+        }
+    }
+}
+
+@Composable
 private fun IntroScreen(onContinue: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        AsyncImage(
-            model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png",
-            contentDescription = "RSS AI Project Manager logo",
-            modifier = Modifier.size(150.dp)
-        )
-        Spacer(Modifier.height(24.dp))
-        Text("RSS AI Project Manager", style = MaterialTheme.typography.headlineMedium)
-        Text("One command center for your RSS projects", style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(24.dp))
-        listOf(
-            "Manage projects, requirements and tasks",
-            "Track AI development execution through RSS Core / RAY",
-            "Keep project state synchronized across clients"
-        ).forEach { Text("• $it", modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) }
-        Spacer(Modifier.height(24.dp))
+    AuthShell("RSS AI Project Manager", "Your central command center for RSS software projects.") {
+        Text("Plan. Coordinate. Execute.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text("Manage projects and tasks while keeping AI execution connected to RSS Core and RAY.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        listOf("Project and requirement management", "AI execution tracking through RSS Core / RAY", "Synchronized project and task state").forEach {
+            Text("•  $it", modifier = Modifier.fillMaxWidth())
+        }
+        Spacer(Modifier.height(8.dp))
         Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
     }
 }
@@ -434,18 +445,13 @@ private fun LoginScreen(
     error: String?, busy: Boolean,
     onCreateAccount: () -> Unit, onLogin: () -> Unit
 ) {
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
-        AsyncImage(model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png", contentDescription = "RSS AI Project Manager logo", modifier = Modifier.fillMaxWidth().height(96.dp).padding(bottom = 16.dp))
-        Text("Welcome back", style = MaterialTheme.typography.headlineMedium)
-        Text("Sign in to your RSS workspace", style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(20.dp))
+    AuthShell("Welcome back", "Sign in to continue to your RSS workspace.") {
         OutlinedTextField(baseUrl, onBaseUrl, label = { Text("RSS Core API URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(email, onEmail, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(email, onEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
-        Spacer(Modifier.height(12.dp))
         Button(onClick = onLogin, enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Signing in..." else "Sign in") }
         OutlinedButton(onClick = onCreateAccount, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Create account") }
-        if (error != null) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 10.dp))
+        if (error != null) Text(error, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -458,19 +464,14 @@ private fun RegisterScreen(
     error: String?, busy: Boolean,
     onBackToLogin: () -> Unit, onRegister: () -> Unit
 ) {
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
-        AsyncImage(model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png", contentDescription = "RSS AI Project Manager logo", modifier = Modifier.fillMaxWidth().height(82.dp).padding(bottom = 12.dp))
-        Text("Create account", style = MaterialTheme.typography.headlineMedium)
-        Text("New accounts require administrator approval.", style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(16.dp))
-        OutlinedTextField(name, onName, label = { Text("Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(email, onEmail, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+    AuthShell("Create your RSS account", "Submit your account request. An administrator must approve it before you can sign in.") {
+        OutlinedTextField(name, onName, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(email, onEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
         OutlinedTextField(confirm, onConfirm, label = { Text("Confirm password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
-        Spacer(Modifier.height(12.dp))
         Button(onClick = onRegister, enabled = !busy && name.isNotBlank() && email.isNotBlank() && password.isNotBlank() && confirm.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Submitting..." else "Request account") }
-        TextButton(onClick = onBackToLogin, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Back to login") }
-        if (error != null) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+        TextButton(onClick = onBackToLogin, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Back to sign in") }
+        if (error != null) Text(error, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
 }
 
