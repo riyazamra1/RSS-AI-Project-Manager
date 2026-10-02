@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -49,6 +50,9 @@ private class ProjectManagerApi(private val baseUrl: String) {
 
     fun login(email: String, password: String): JSONObject =
         JSONObject(request("/auth/login", "POST", JSONObject().put("email", email).put("password", password).toString()))
+
+    fun register(name: String, email: String, password: String): JSONObject =
+        JSONObject(request("/auth/register", "POST", JSONObject().put("name", name).put("email", email).put("password", password).toString()))
 
     fun projects(): JSONArray = JSONArray(request("/api/v1/projects", "GET"))
 
@@ -123,6 +127,12 @@ private fun ProjectManagerApp() {
     var password by remember { mutableStateOf("") }
     var workspaceId by remember { mutableStateOf(securePrefs.getString("workspace_id", null)) }
     var signedIn by remember { mutableStateOf(securePrefs.getString("token", null) != null) }
+    var introSeen by remember { mutableStateOf(securePrefs.getBoolean("intro_seen", false)) }
+    var authMode by remember { mutableStateOf("login") }
+    var registerName by remember { mutableStateOf("") }
+    var registerEmail by remember { mutableStateOf("") }
+    var registerPassword by remember { mutableStateOf("") }
+    var registerConfirm by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
@@ -191,7 +201,13 @@ private fun ProjectManagerApp() {
 
     MaterialTheme {
         Surface(Modifier.fillMaxSize()) {
-            if (!signedIn) {
+            if (!introSeen) {
+                IntroScreen(onContinue = {
+                    introSeen = true
+                    securePrefs.edit().putBoolean("intro_seen", true).apply()
+                })
+            } else if (!signedIn) {
+                if (authMode == "login") {
                 LoginScreen(
                     baseUrl = baseUrl,
                     onBaseUrl = { baseUrl = it },
@@ -200,7 +216,8 @@ private fun ProjectManagerApp() {
                     password = password,
                     onPassword = { password = it },
                     error = error,
-                    busy = busy
+                    busy = busy,
+                    onCreateAccount = { authMode = "register"; error = null }
                 ) {
                     busy = true
                     scope.launch(Dispatchers.IO) {
@@ -232,6 +249,34 @@ private fun ProjectManagerApp() {
                             error = e.message
                         } finally {
                             busy = false
+                        }
+                    }
+                } else {
+                    RegisterScreen(
+                        name = registerName, onName = { registerName = it },
+                        email = registerEmail, onEmail = { registerEmail = it },
+                        password = registerPassword, onPassword = { registerPassword = it },
+                        confirm = registerConfirm, onConfirm = { registerConfirm = it },
+                        error = error, busy = busy,
+                        onBackToLogin = { authMode = "login"; error = null }
+                    ) {
+                        if (registerPassword != registerConfirm) {
+                            error = "Passwords do not match"
+                        } else {
+                            busy = true
+                            scope.launch(Dispatchers.IO) {
+                                try {
+                                    val result = api.register(registerName.trim(), registerEmail.trim(), registerPassword)
+                                    error = result.optString("message", "Account request submitted. Please wait for administrator approval before signing in.")
+                                    email = registerEmail.trim()
+                                    password = ""
+                                    registerPassword = ""
+                                    registerConfirm = ""
+                                    authMode = "login"
+                                } catch (e: Exception) {
+                                    error = e.message
+                                } finally { busy = false }
+                            }
                         }
                     }
                 }
@@ -360,62 +405,72 @@ private fun ProjectManagerApp() {
 }
 
 @Composable
-private fun LoginScreen(
-    baseUrl: String,
-    onBaseUrl: (String) -> Unit,
-    email: String,
-    onEmail: (String) -> Unit,
-    password: String,
-    onPassword: (String) -> Unit,
-    error: String?,
-    busy: Boolean,
-    onLogin: () -> Unit
-) {
-    Column(
-        Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
+private fun IntroScreen(onContinue: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         AsyncImage(
             model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png",
             contentDescription = "RSS AI Project Manager logo",
-            modifier = Modifier.fillMaxWidth().height(96.dp).padding(bottom = 16.dp)
+            modifier = Modifier.size(150.dp)
         )
+        Spacer(Modifier.height(24.dp))
         Text("RSS AI Project Manager", style = MaterialTheme.typography.headlineMedium)
-        Text("Android control client", style = MaterialTheme.typography.bodyMedium)
+        Text("One command center for your RSS projects", style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.height(24.dp))
+        listOf(
+            "Manage projects, requirements and tasks",
+            "Track AI development execution through RSS Core / RAY",
+            "Keep project state synchronized across clients"
+        ).forEach { Text("• $it", modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) }
+        Spacer(Modifier.height(24.dp))
+        Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
+    }
+}
+
+@Composable
+private fun LoginScreen(
+    baseUrl: String, onBaseUrl: (String) -> Unit,
+    email: String, onEmail: (String) -> Unit,
+    password: String, onPassword: (String) -> Unit,
+    error: String?, busy: Boolean,
+    onCreateAccount: () -> Unit, onLogin: () -> Unit
+) {
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+        AsyncImage(model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png", contentDescription = "RSS AI Project Manager logo", modifier = Modifier.fillMaxWidth().height(96.dp).padding(bottom = 16.dp))
+        Text("Welcome back", style = MaterialTheme.typography.headlineMedium)
+        Text("Sign in to your RSS workspace", style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.height(20.dp))
-        OutlinedTextField(
-            baseUrl, onBaseUrl,
-            label = { Text("RSS Core API URL") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        OutlinedTextField(
-            email, onEmail,
-            label = { Text("Email") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        OutlinedTextField(
-            password, onPassword,
-            label = { Text("Password") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
+        OutlinedTextField(baseUrl, onBaseUrl, label = { Text("RSS Core API URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(email, onEmail, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
         Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = onLogin,
-            enabled = !busy && email.isNotBlank() && password.isNotBlank(),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(if (busy) "Signing in..." else "Sign in")
-        }
-        if (error != null) {
-            Text(
-                error,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 10.dp)
-            )
-        }
+        Button(onClick = onLogin, enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Signing in..." else "Sign in") }
+        OutlinedButton(onClick = onCreateAccount, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Create account") }
+        if (error != null) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 10.dp))
+    }
+}
+
+@Composable
+private fun RegisterScreen(
+    name: String, onName: (String) -> Unit,
+    email: String, onEmail: (String) -> Unit,
+    password: String, onPassword: (String) -> Unit,
+    confirm: String, onConfirm: (String) -> Unit,
+    error: String?, busy: Boolean,
+    onBackToLogin: () -> Unit, onRegister: () -> Unit
+) {
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+        AsyncImage(model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png", contentDescription = "RSS AI Project Manager logo", modifier = Modifier.fillMaxWidth().height(82.dp).padding(bottom = 12.dp))
+        Text("Create account", style = MaterialTheme.typography.headlineMedium)
+        Text("New accounts require administrator approval.", style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(16.dp))
+        OutlinedTextField(name, onName, label = { Text("Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(email, onEmail, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
+        OutlinedTextField(confirm, onConfirm, label = { Text("Confirm password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = onRegister, enabled = !busy && name.isNotBlank() && email.isNotBlank() && password.isNotBlank() && confirm.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Submitting..." else "Request account") }
+        TextButton(onClick = onBackToLogin, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Back to login") }
+        if (error != null) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
