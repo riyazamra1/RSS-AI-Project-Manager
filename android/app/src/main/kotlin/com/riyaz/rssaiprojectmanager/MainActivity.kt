@@ -255,9 +255,9 @@ private fun ProjectManagerApp() {
                             busy = false
                         }
                     }
-                }
-                else {
-                    RegisterScreen(
+                )
+            } else {
+                RegisterScreen(
                         workspace = registerWorkspace, onWorkspace = { registerWorkspace = it },
                         name = registerName, onName = { registerName = it },
                         email = registerEmail, onEmail = { registerEmail = it },
