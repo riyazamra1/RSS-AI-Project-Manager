@@ -7,12 +7,14 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
@@ -117,8 +119,7 @@ private fun ProjectManagerApp() {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
     }
-    var baseUrl by remember { mutableStateOf("https://rsscore.cv") }
-    var email by remember { mutableStateOf("") }
+    var baseUrl by remember { mutableStateOf("https://rsscore.cv") }    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var workspaceId by remember { mutableStateOf(securePrefs.getString("workspace_id", null)) }
     var signedIn by remember { mutableStateOf(securePrefs.getString("token", null) != null) }
@@ -297,8 +298,7 @@ private fun ProjectManagerApp() {
                         loadProjects()
                         selected?.let { loadTasks(it) }
                     },
-                    busy = busy,
-                    error = error,
+                    busy = busy,                    error = error,
                     onCreateProject = { id, name, repo, description ->
                         busy = true
                         scope.launch(Dispatchers.IO) {
@@ -375,6 +375,11 @@ private fun LoginScreen(
         Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center
     ) {
+        AsyncImage(
+            model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png",
+            contentDescription = "RSS AI Project Manager logo",
+            modifier = Modifier.fillMaxWidth().height(96.dp).padding(bottom = 16.dp)
+        )
         Text("RSS AI Project Manager", style = MaterialTheme.typography.headlineMedium)
         Text("Android control client", style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.height(20.dp))
@@ -517,8 +522,7 @@ private fun Dashboard(
                     Text("Create")
                 }
             },
-            dismissButton = { TextButton(onClick = onDismissProjectForm) { Text("Cancel") } }
-        )
+            dismissButton = { TextButton(onClick = onDismissProjectForm) { Text("Cancel") } }        )
     }
 
     LazyColumn(
@@ -530,7 +534,15 @@ private fun Dashboard(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("RSS Projects", style = MaterialTheme.typography.headlineSmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AsyncImage(
+                        model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png",
+                        contentDescription = "RSS AI Project Manager logo",
+                        modifier = Modifier.size(44.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text("RSS Projects", style = MaterialTheme.typography.headlineSmall)
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = onRefresh, enabled = !busy) { Text("Refresh") }
                     OutlinedButton(onClick = onLogout, enabled = !busy) { Text("Logout") }
