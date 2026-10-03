@@ -45,7 +45,10 @@ async def _send_template(to: str, template_id: str, variables: dict[str, str]) -
         raise RuntimeError(f"Resend template send failed: {response.status_code}")
 
 def _app_url(path: str = "") -> str:
-    return settings.app_base_url.rstrip("/") + path
+    # Production verification links must never be generated with an empty origin.
+    # Keep APP_BASE_URL configurable, but use the canonical public PM URL when it is unset.
+    base = (settings.app_base_url or "https://pm.rssapps.cv").strip().rstrip("/")
+    return base + path
 
 async def _submit_to_rss_core(user_id: str, request_id: str, email: str, full_name: str) -> None:
     url = settings.rss_core_approval_url.rstrip("/") + "/api/v1/internal/project-manager/registration-requests"
