@@ -71,13 +71,18 @@
 
 <script>
 let token=localStorage.getItem('rss_pm_token'),featureIndex=0,featureTimer;
+const $=id=>document.getElementById(id);
+const splash=$('splash'),features=$('features'),auth=$('auth'),welcome=$('welcome'),app=$('app');
+const loginForm=$('loginForm'),registerForm=$('registerForm'),loginMsg=$('loginMsg'),registerMsg=$('registerMsg');
+const email=$('email'),password=$('password'),regName=$('regName'),regEmail=$('regEmail'),regPassword=$('regPassword'),workspaceName=$('workspaceName'),terms=$('terms'),createBtn=$('createBtn');
+const signInTab=$('signInTab'),registerTab=$('registerTab'),authTitle=$('authTitle'),authSubtitle=$('authSubtitle'),welcomeTitle=$('welcomeTitle'),user=$('user'),workspace=$('workspace'),projectCount=$('projectCount'),taskCount=$('taskCount'),runningCount=$('runningCount'),projectsList=$('projectsList'),tasksList=$('tasksList'),actionMsg=$('actionMsg'),title=$('title');
 const api=(p,o={})=>fetch(p,{...o,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(o.headers||{})}});
 function authMode(m){const login=m==='login';loginForm.classList.toggle('hidden',!login);registerForm.classList.toggle('hidden',login);signInTab.classList.toggle('active',login);registerTab.classList.toggle('active',!login);authTitle.textContent=login?'Sign in':'Create account';authSubtitle.textContent=login?'Use your approved RSS account.':'Create an account for RSS Core administrator approval.'}
 function oauth(provider){location.href='/auth/'+provider+'/start'}
 async function readResponse(r){const text=await r.text();let d={};if(text.trim()){try{d=JSON.parse(text)}catch(_){d={message:text.trim()}}}if(!r.ok)throw Error(d.detail||d.message||`Request failed (HTTP ${r.status})`);return d}
 async function login(e){e.preventDefault();loginMsg.textContent='';try{const r=await api('/auth/login',{method:'POST',body:JSON.stringify({email:email.value,password:password.value})}),d=await readResponse(r);token=d.access_token;localStorage.setItem('rss_pm_token',token);start(d)}catch(x){loginMsg.textContent=x.message}}
 async function register(e){e.preventDefault();registerMsg.className='error';registerMsg.textContent='';const name=regName.value.trim(),mail=regEmail.value.trim(),pass=regPassword.value,ws=workspaceName.value.trim();if(!name||!mail||!pass||!ws){registerMsg.textContent='Please complete all required fields.';return}if(pass.length<12){registerMsg.textContent='Password must be at least 12 characters.';return}if(!terms.checked){registerMsg.textContent='Please accept the Terms & Conditions and Privacy Policy.';return}const btn=createBtn;btn.disabled=true;btn.textContent='Submitting…';try{const r=await api('/auth/register',{method:'POST',body:JSON.stringify({full_name:name,email:mail,password:pass,workspace_name:ws})}),d=await readResponse(r);registerMsg.className='success';registerMsg.textContent=d.message||'Account request submitted. Check your email and wait for RSS Core administrator approval.'}catch(x){registerMsg.textContent=x.message}finally{btn.disabled=false;btn.textContent='Request account'}}
-terms.addEventListener('change',()=>createBtn.disabled=!terms.checked);
+terms.addEventListener('change',()=>{createBtn.disabled=false;});
 function showAuth(){features.classList.add('hidden');auth.classList.remove('hidden');clearInterval(featureTimer);authMode('login')}
 function showWelcome(){features.classList.add('hidden');auth.classList.add('hidden');welcome.classList.remove('hidden');clearInterval(featureTimer);welcomeTitle.textContent='Welcome'+(window.currentUserName?', '+window.currentUserName:'')}
 function enterDashboard(){welcome.classList.add('hidden');app.classList.remove('hidden');user.textContent=window.currentUserName||'';refreshAll()}
@@ -88,6 +93,7 @@ async function goAhead(){actionMsg.textContent='Requesting…';try{const r=await
 function logout(){localStorage.clear();location.reload()}
 function show(id,b){['dashboard','projects','tasks'].forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==id));document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');title.textContent=id[0].toUpperCase()+id.slice(1)}
 loginForm.addEventListener('submit',login);registerForm.addEventListener('submit',register);
+registerForm.addEventListener('invalid',()=>{registerMsg.className='error';registerMsg.textContent='Please complete the highlighted required fields.';},true);
 function beginExperience(){splash.classList.add('hide');features.classList.remove('hidden');featureIndex=0;const fs=document.querySelectorAll('.feature'),ds=document.querySelectorAll('.dot');const rotate=()=>{fs.forEach((x,i)=>x.classList.toggle('show',i===featureIndex));ds.forEach((x,i)=>x.classList.toggle('active',i===featureIndex));featureIndex=(featureIndex+1)%fs.length};rotate();clearInterval(featureTimer);featureTimer=setInterval(rotate,1800)}
 setTimeout(beginExperience,900);
 </script></body></html>
