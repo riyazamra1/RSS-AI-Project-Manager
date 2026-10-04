@@ -57,7 +57,7 @@ async def _submit_to_rss_core(user_id: str, request_id: str, email: str, full_na
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
             url,
-            headers={"Authorization": f"Bearer {settings.rss_core_service_token}", "Content-Type": "application/json"},
+            headers={"Authorization": f"Bearer {(settings.rss_core_service_token or '').strip()}", "Content-Type": "application/json"},
             json={"request_id": request_id, "user_id": user_id, "email": email, "name": full_name},
         )
     if response.status_code >= 300:
