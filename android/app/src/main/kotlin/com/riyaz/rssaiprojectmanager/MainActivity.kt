@@ -130,7 +130,8 @@ data class RemoteAuthConfig(
     val policyLabel: String = "I agree to the Terms of Service and Privacy Policy",
     val policyRequiredMessage: String = "Please accept the Terms of Service and Privacy Policy to continue.",
     val submittingLabel: String = "Submitting request…",
-    val signingInLabel: String = "Signing in…"
+    val signingInLabel: String = "Signing in…",
+    val primaryColorHex: String = "#3949AB"
 ) {
     companion object {
         fun fromJson(json: String): RemoteAuthConfig {
@@ -150,7 +151,8 @@ data class RemoteAuthConfig(
                 policyLabel = o.optString("policy_label", RemoteAuthConfig().policyLabel),
                 policyRequiredMessage = o.optString("policy_required_message", RemoteAuthConfig().policyRequiredMessage),
                 submittingLabel = o.optString("submitting_label", RemoteAuthConfig().submittingLabel),
-                signingInLabel = o.optString("signing_in_label", RemoteAuthConfig().signingInLabel)
+                signingInLabel = o.optString("signing_in_label", RemoteAuthConfig().signingInLabel),
+                primaryColorHex = o.optString("primary_color_hex", RemoteAuthConfig().primaryColorHex)
             )
         }
     }
@@ -171,7 +173,8 @@ private const val DEFAULT_AUTH_CONFIG = """{
   "policy_label": "I agree to the Terms of Service and Privacy Policy",
   "policy_required_message": "Please accept the Terms of Service and Privacy Policy to continue.",
   "submitting_label": "Submitting request…",
-  "signing_in_label": "Signing in…"
+  "signing_in_label": "Signing in…",
+  "primary_color_hex": "#3949AB"
 }
 
 private fun fetchRemoteAuthConfig(baseUrl: String): String {
@@ -551,6 +554,9 @@ private fun AuthScreen(
     error: String?, success: String?, busy: Boolean, onLogin: () -> Unit, onRegister: () -> Unit
 ) {
     var policyAccepted by remember { mutableStateOf(false) }
+    val primaryColor = remember(authConfig.primaryColorHex) {
+        runCatching { Color(android.graphics.Color.parseColor(authConfig.primaryColorHex)) }.getOrDefault(Color(0xFF3949AB))
+    }
     AnimatedRoyalBackground {
         Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             AsyncImage(model = authConfig.logoUrl, contentDescription = "RSS AI Project Manager logo", modifier = Modifier.size(width = 150.dp, height = 92.dp), contentScale = ContentScale.Fit, error = painterResource(R.drawable.rss_ai_project_manager_logo), placeholder = painterResource(R.drawable.rss_ai_project_manager_logo))
@@ -564,7 +570,7 @@ private fun AuthScreen(
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
                     Row(Modifier.fillMaxWidth().background(Color(0xFFE8EAF6), RoundedCornerShape(16.dp)).padding(4.dp)) {
                         listOf("login" to "Sign In", "register" to "Create Account").forEach { (key,label) ->
-                            Button(onClick={onTab(key)}, Modifier.weight(1f), shape=RoundedCornerShape(12.dp), colors=ButtonDefaults.buttonColors(containerColor=if(tab==key) Color(0xFF3949AB) else Color.Transparent, contentColor=if(tab==key) Color.White else Color(0xFF3949AB))) { Text(if (key == "login") authConfig.signInLabel else authConfig.createAccountLabel) }
+                            Button(onClick={onTab(key)}, Modifier.weight(1f), shape=RoundedCornerShape(12.dp), colors=ButtonDefaults.buttonColors(containerColor=if(tab==key) primaryColor else Color.Transparent, contentColor=if(tab==key) Color.White else primaryColor)) { Text(if (key == "login") authConfig.signInLabel else authConfig.createAccountLabel) }
                         }
                     }
                     if (tab == "login") {
@@ -583,7 +589,7 @@ private fun AuthScreen(
                                 OutlinedTextField(value = registerConfirm, onValueChange = onRegisterConfirm, label = { Text("Confirm password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
                                 Row(Modifier.fillMaxWidth().clickable(enabled=!busy){policyAccepted=!policyAccepted}, verticalAlignment=Alignment.CenterVertically) {
                                     Checkbox(checked=policyAccepted, onCheckedChange={policyAccepted=it}, enabled=!busy)
-                                    Text(authConfig.policyLabel, color=Color(0xFF3949AB))
+                                    Text(authConfig.policyLabel, color=primaryColor)
                                 }
                                 Button(onClick=onRegister, enabled=!busy&&policyAccepted, modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) { Text(if(busy) authConfig.submittingLabel else authConfig.registerButtonLabel) }
                                 if(!policyAccepted) Text(authConfig.policyRequiredMessage, color=Color(0xFFC62828), style=MaterialTheme.typography.bodySmall)
