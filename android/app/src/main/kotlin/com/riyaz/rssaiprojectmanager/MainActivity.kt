@@ -467,24 +467,28 @@ private fun AuthScreen(
                             Button(onClick={onTab(key)}, Modifier.weight(1f), shape=RoundedCornerShape(12.dp), colors=ButtonDefaults.buttonColors(containerColor=if(tab==key) Color(0xFF3949AB) else Color.Transparent, contentColor=if(tab==key) Color.White else Color(0xFF3949AB))) { Text(label) }
                         }
                     }
-                    androidx.compose.animation.AnimatedContent(targetState=tab, label="authTab") { selected ->
-                        Column(verticalArrangement=Arrangement.spacedBy(11.dp)) {
-                            if(selected=="login") {
-                                OutlinedTextField(baseUrl,onBaseUrl,label={Text("Project Manager API URL")},Modifier.fillMaxWidth(),singleLine=true,shape=RoundedCornerShape(14.dp))
-                                OutlinedTextField(loginEmail,onLoginEmail,label={Text("Email address")},Modifier.fillMaxWidth(),singleLine=true,shape=RoundedCornerShape(14.dp),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email))
-                                OutlinedTextField(loginPassword,onLoginPassword,label={Text("Password")},Modifier.fillMaxWidth(),singleLine=true,visualTransformation=PasswordVisualTransformation(),shape=RoundedCornerShape(14.dp))
-                                Button(onClick=onLogin,enabled=!busy&&loginEmail.isNotBlank()&&loginPassword.isNotBlank(),Modifier.fillMaxWidth().height(52.dp),shape=RoundedCornerShape(16.dp)){Text(if(busy)"Signing in…" else "Sign in")}
-                            } else {
-                                OutlinedTextField(registerName,onRegisterName,label={Text("Full name")},Modifier.fillMaxWidth(),singleLine=true,shape=RoundedCornerShape(14.dp))
-                                OutlinedTextField(registerWorkspace,onRegisterWorkspace,label={Text("Workspace name")},Modifier.fillMaxWidth(),singleLine=true,shape=RoundedCornerShape(14.dp))
-                                OutlinedTextField(registerEmail,onRegisterEmail,label={Text("Email address")},Modifier.fillMaxWidth(),singleLine=true,shape=RoundedCornerShape(14.dp),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email))
-                                OutlinedTextField(registerPassword,onRegisterPassword,label={Text("Password")},Modifier.fillMaxWidth(),singleLine=true,visualTransformation=PasswordVisualTransformation(),shape=RoundedCornerShape(14.dp))
-                                OutlinedTextField(registerConfirm,onRegisterConfirm,label={Text("Confirm password")},Modifier.fillMaxWidth(),singleLine=true,visualTransformation=PasswordVisualTransformation(),shape=RoundedCornerShape(14.dp))
-                                Row(Modifier.fillMaxWidth().clickable(enabled=!busy){policyAccepted=!policyAccepted},verticalAlignment=Alignment.CenterVertically) {
-                                    Checkbox(checked=policyAccepted,onCheckedChange={policyAccepted=it},enabled=!busy)
+                    if (tab == "login") {
+                        androidx.compose.animation.AnimatedVisibility(visible = true) {
+                            Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                                OutlinedTextField(baseUrl, onBaseUrl, label={Text("Project Manager API URL")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp))
+                                OutlinedTextField(loginEmail, onLoginEmail, label={Text("Email address")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp), keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email))
+                                OutlinedTextField(loginPassword, onLoginPassword, label={Text("Password")}, Modifier.fillMaxWidth(), singleLine=true, visualTransformation=PasswordVisualTransformation(), shape=RoundedCornerShape(14.dp))
+                                Button(onClick=onLogin, enabled=!busy&&loginEmail.isNotBlank()&&loginPassword.isNotBlank(), modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) { Text(if(busy) "Signing in…" else "Sign in") }
+                            }
+                        }
+                    } else {
+                        androidx.compose.animation.AnimatedVisibility(visible = true) {
+                            Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                                OutlinedTextField(registerName, onRegisterName, label={Text("Full name")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp))
+                                OutlinedTextField(registerWorkspace, onRegisterWorkspace, label={Text("Workspace name")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp))
+                                OutlinedTextField(registerEmail, onRegisterEmail, label={Text("Email address")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp), keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email))
+                                OutlinedTextField(registerPassword, onRegisterPassword, label={Text("Password")}, Modifier.fillMaxWidth(), singleLine=true, visualTransformation=PasswordVisualTransformation(), shape=RoundedCornerShape(14.dp))
+                                OutlinedTextField(registerConfirm, onRegisterConfirm, label={Text("Confirm password")}, Modifier.fillMaxWidth(), singleLine=true, visualTransformation=PasswordVisualTransformation(), shape=RoundedCornerShape(14.dp))
+                                Row(Modifier.fillMaxWidth().clickable(enabled=!busy){policyAccepted=!policyAccepted}, verticalAlignment=Alignment.CenterVertically) {
+                                    Checkbox(checked=policyAccepted, onCheckedChange={policyAccepted=it}, enabled=!busy)
                                     Text("I agree to the Terms of Service and Privacy Policy", color=Color(0xFF3949AB))
                                 }
-                                Button(onClick=onRegister,enabled=!busy&&policyAccepted,Modifier.fillMaxWidth().height(52.dp),shape=RoundedCornerShape(16.dp)){Text(if(busy)"Submitting request…" else "Request account")}
+                                Button(onClick=onRegister, enabled=!busy&&policyAccepted, modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) { Text(if(busy) "Submitting request…" else "Request account") }
                                 if(!policyAccepted) Text("Please accept the Terms of Service and Privacy Policy to continue.", color=Color(0xFFC62828), style=MaterialTheme.typography.bodySmall)
                             }
                         }
