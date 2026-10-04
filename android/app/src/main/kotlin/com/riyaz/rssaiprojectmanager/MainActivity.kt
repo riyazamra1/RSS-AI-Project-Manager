@@ -469,18 +469,18 @@ private fun AuthScreen(
                     }
                     if (tab == "login") {
                         Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                                OutlinedTextField(baseUrl, onBaseUrl, label={Text("Project Manager API URL")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp))
-                                OutlinedTextField(loginEmail, onLoginEmail, label={Text("Email address")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp), keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email))
-                                OutlinedTextField(loginPassword, onLoginPassword, label={Text("Password")}, Modifier.fillMaxWidth(), singleLine=true, visualTransformation=PasswordVisualTransformation(), shape=RoundedCornerShape(14.dp))
+                                OutlinedTextField(value = baseUrl, onValueChange = onBaseUrl, label = { Text("Project Manager API URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
+                                OutlinedTextField(value = loginEmail, onValueChange = onLoginEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+                                OutlinedTextField(value = loginPassword, onValueChange = onLoginPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
                                 Button(onClick=onLogin, enabled=!busy&&loginEmail.isNotBlank()&&loginPassword.isNotBlank(), modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) { Text(if(busy) "Signing in…" else "Sign in") }
                         }
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                                OutlinedTextField(registerName, onRegisterName, label={Text("Full name")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp))
-                                OutlinedTextField(registerWorkspace, onRegisterWorkspace, label={Text("Workspace name")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp))
-                                OutlinedTextField(registerEmail, onRegisterEmail, label={Text("Email address")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp), keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email))
-                                OutlinedTextField(registerPassword, onRegisterPassword, label={Text("Password")}, Modifier.fillMaxWidth(), singleLine=true, visualTransformation=PasswordVisualTransformation(), shape=RoundedCornerShape(14.dp))
-                                OutlinedTextField(registerConfirm, onRegisterConfirm, label={Text("Confirm password")}, Modifier.fillMaxWidth(), singleLine=true, visualTransformation=PasswordVisualTransformation(), shape=RoundedCornerShape(14.dp))
+                                OutlinedTextField(value = registerName, onValueChange = onRegisterName, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
+                                OutlinedTextField(value = registerWorkspace, onValueChange = onRegisterWorkspace, label = { Text("Workspace name") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
+                                OutlinedTextField(value = registerEmail, onValueChange = onRegisterEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+                                OutlinedTextField(value = registerPassword, onValueChange = onRegisterPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
+                                OutlinedTextField(value = registerConfirm, onValueChange = onRegisterConfirm, label = { Text("Confirm password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
                                 Row(Modifier.fillMaxWidth().clickable(enabled=!busy){policyAccepted=!policyAccepted}, verticalAlignment=Alignment.CenterVertically) {
                                     Checkbox(checked=policyAccepted, onCheckedChange={policyAccepted=it}, enabled=!busy)
                                     Text("I agree to the Terms of Service and Privacy Policy", color=Color(0xFF3949AB))
