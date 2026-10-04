@@ -425,7 +425,7 @@ private fun IntroFlowScreen(onFinish: () -> Unit) {
     val bodies = listOf("One command center for your RSS project portfolio.", "Capture requirements, priorities and next actions in one place.", "Connect RSS Core and automation so approved work can move forward.", "Monitor projects, tasks and execution status from your dashboard.")
     AnimatedRoyalBackground {
         Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Image(painterResource(R.drawable.rss_ai_project_manager_logo), "RSS AI Project Manager logo", Modifier.size(190.dp), ContentScale.Fit)
+            Image(painter = painterResource(R.drawable.rss_ai_project_manager_logo), contentDescription = "RSS AI Project Manager logo", modifier = Modifier.size(190.dp), contentScale = ContentScale.Fit)
             Spacer(Modifier.height(28.dp))
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(30.dp), colors = CardDefaults.cardColors(Color.White.copy(alpha=.96f))) {
                 Column(Modifier.padding(26.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -456,7 +456,7 @@ private fun AuthScreen(
     var policyAccepted by remember { mutableStateOf(false) }
     AnimatedRoyalBackground {
         Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Image(painterResource(R.drawable.rss_ai_project_manager_logo), "RSS AI Project Manager logo", Modifier.size(width=150.dp,height=92.dp), ContentScale.Fit)
+            Image(painter = painterResource(R.drawable.rss_ai_project_manager_logo), contentDescription = "RSS AI Project Manager logo", modifier = Modifier.size(width = 150.dp, height = 92.dp), contentScale = ContentScale.Fit)
             Text("RSS AI PROJECT MANAGER", color=Color.White, fontWeight=FontWeight.Bold)
             Spacer(Modifier.height(14.dp))
             Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(28.dp), colors=CardDefaults.cardColors(Color.White.copy(alpha=.97f)), elevation=CardDefaults.cardElevation(10.dp)) {
