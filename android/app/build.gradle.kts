@@ -45,3 +45,5 @@ dependencies {
     implementation("org.json:json:20240303")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
+
+// RSS AUTO build trigger: Android APK verification.
