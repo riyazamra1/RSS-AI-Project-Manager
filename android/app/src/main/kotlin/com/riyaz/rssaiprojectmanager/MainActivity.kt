@@ -47,7 +47,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private class ProjectManagerApi(private val baseUrl: String) {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder().connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS).readTimeout(30, java.util.concurrent.TimeUnit.SECONDS).writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS).callTimeout(45, java.util.concurrent.TimeUnit.SECONDS).build()
     var token: String? = null
     var workspaceId: String? = null
 
@@ -157,6 +157,7 @@ private fun ProjectManagerApp() {
     var registerConfirm by remember { mutableStateOf("") }
     var registerWorkspace by remember { mutableStateOf("My RSS Workspace") }
     var error by remember { mutableStateOf<String?>(null) }
+    var success by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
     val api = remember(baseUrl) { ProjectManagerApi(baseUrl).also { it.token = securePrefs.getString("token", null); it.workspaceId = workspaceId } }
@@ -232,7 +233,7 @@ private fun ProjectManagerApp() {
             } else if (!signedIn) {
                 AuthScreen(
                     tab = authTab,
-                    onTab = { authTab = it; error = null },
+                    onTab = { authTab = it; error = null; success = null },
                     baseUrl = baseUrl, onBaseUrl = { baseUrl = it },
                     loginEmail = email, onLoginEmail = { email = it },
                     loginPassword = password, onLoginPassword = { password = it },
@@ -241,9 +242,10 @@ private fun ProjectManagerApp() {
                     registerPassword = registerPassword, onRegisterPassword = { registerPassword = it },
                     registerConfirm = registerConfirm, onRegisterConfirm = { registerConfirm = it },
                     registerWorkspace = registerWorkspace, onRegisterWorkspace = { registerWorkspace = it },
-                    error = error, busy = busy,
+                    error = error, success = success, busy = busy,
                     onLogin = {
                         if (email.isBlank() || password.isBlank()) { error = "Enter email and password."; return@AuthScreen }
+                        error = null; success = null
                         busy = true
                         scope.launch(Dispatchers.IO) {
                             try {
@@ -269,15 +271,17 @@ private fun ProjectManagerApp() {
                             registerPassword != registerConfirm -> error = "Passwords do not match."
                             workspace.isBlank() -> error = "Enter a workspace name."
                             else -> {
+                                error = null
+                                success = null
                                 busy = true
                                 scope.launch(Dispatchers.IO) {
                                     try {
                                         val result = api.register(name, mail, registerPassword, workspace)
-                                        error = result.optString("message", "Account request submitted. Check your email and wait for administrator approval.")
+                                        success = result.optString("message", "Account request submitted. Check your email and wait for administrator approval.").ifBlank { "Account request submitted. Check your email and wait for administrator approval." }
                                         email = mail; password = ""; registerPassword = ""; registerConfirm = ""
-                                        authTab = "login"
-                                    } catch (e: Exception) { error = e.message ?: "Registration failed." }
-                                    finally { busy = false }
+                                    } catch (e: Exception) {
+                                        error = e.message ?: "Registration failed. Please try again."
+                                    } finally { busy = false }
                                 }
                             }
                         }
@@ -451,7 +455,7 @@ private fun AuthScreen(
     registerPassword: String, onRegisterPassword: (String) -> Unit,
     registerConfirm: String, onRegisterConfirm: (String) -> Unit,
     registerWorkspace: String, onRegisterWorkspace: (String) -> Unit,
-    error: String?, busy: Boolean, onLogin: () -> Unit, onRegister: () -> Unit
+    error: String?, success: String?, busy: Boolean, onLogin: () -> Unit, onRegister: () -> Unit
 ) {
     var policyAccepted by remember { mutableStateOf(false) }
     AnimatedRoyalBackground {
@@ -462,6 +466,8 @@ private fun AuthScreen(
             Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(28.dp), colors=CardDefaults.cardColors(Color.White.copy(alpha=.97f)), elevation=CardDefaults.cardElevation(10.dp)) {
                 Column(Modifier.padding(22.dp), verticalArrangement=Arrangement.spacedBy(11.dp)) {
                     Text("Welcome to RSS AI Project Manager", style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold, color=Color(0xFF182052), textAlign=TextAlign.Center, modifier=Modifier.fillMaxWidth())
+                    success?.let { Text(it, color = Color(0xFF137333), fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
+                    error?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
                     Row(Modifier.fillMaxWidth().background(Color(0xFFE8EAF6), RoundedCornerShape(16.dp)).padding(4.dp)) {
                         listOf("login" to "Sign In", "register" to "Create Account").forEach { (key,label) ->
                             Button(onClick={onTab(key)}, Modifier.weight(1f), shape=RoundedCornerShape(12.dp), colors=ButtonDefaults.buttonColors(containerColor=if(tab==key) Color(0xFF3949AB) else Color.Transparent, contentColor=if(tab==key) Color.White else Color(0xFF3949AB))) { Text(label) }
