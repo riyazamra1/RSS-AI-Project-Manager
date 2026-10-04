@@ -13,6 +13,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.runtime.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -32,6 +34,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import coil.compose.AsyncImage
 import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
@@ -145,7 +150,7 @@ private fun ProjectManagerApp() {
     var workspaceId by remember { mutableStateOf(securePrefs.getString("workspace_id", null)) }
     var signedIn by remember { mutableStateOf(securePrefs.getString("token", null) != null) }
     var introSeen by remember { mutableStateOf(securePrefs.getBoolean("intro_seen", false)) }
-    var authMode by remember { mutableStateOf("login") }
+    var authTab by remember { mutableStateOf("login") }
     var registerName by remember { mutableStateOf("") }
     var registerEmail by remember { mutableStateOf("") }
     var registerPassword by remember { mutableStateOf("") }
@@ -220,73 +225,46 @@ private fun ProjectManagerApp() {
     MaterialTheme {
         Surface(Modifier.fillMaxSize()) {
             if (!introSeen) {
-                IntroScreen(onContinue = {
+                IntroFlowScreen(onFinish = {
                     introSeen = true
                     securePrefs.edit().putBoolean("intro_seen", true).apply()
                 })
             } else if (!signedIn) {
-                if (authMode == "login") {
-                LoginScreen(
-                    baseUrl = baseUrl,
-                    onBaseUrl = { baseUrl = it },
-                    email = email,
-                    onEmail = { email = it },
-                    password = password,
-                    onPassword = { password = it },
-                    error = error,
-                    busy = busy,
-                    onCreateAccount = { authMode = "register"; error = null }
-                ) {
-                    busy = true
-                    scope.launch(Dispatchers.IO) {
-                        try {
-                            val result = api.login(email.trim(), password)
-                            api.token = result.getString("access_token")
-                            securePrefs.edit().putString("token", api.token).apply()
-
-                            val workspace = result.optJSONObject("workspace")
-                            if (workspace != null) {
-                                api.workspaceId = workspace.getString("id")
-                            } else {
-                                val workspaces = result.optJSONArray("workspaces")
-                                if (workspaces != null && workspaces.length() > 0) {
-                                    api.workspaceId = workspaces.getJSONObject(0).getString("id")
+                AuthScreen(
+                    tab = authTab,
+                    onTab = { authTab = it; error = null },
+                    baseUrl = baseUrl, onBaseUrl = { baseUrl = it },
+                    loginEmail = email, onLoginEmail = { email = it },
+                    loginPassword = password, onLoginPassword = { password = it },
+                    registerName = registerName, onRegisterName = { registerName = it },
+                    registerEmail = registerEmail, onRegisterEmail = { registerEmail = it },
+                    registerPassword = registerPassword, onRegisterPassword = { registerPassword = it },
+                    registerConfirm = registerConfirm, onRegisterConfirm = { registerConfirm = it },
+                    registerWorkspace = registerWorkspace, onRegisterWorkspace = { registerWorkspace = it },
+                    error = error, busy = busy,
+                    onLogin = {
+                        if (email.isBlank() || password.isBlank()) { error = "Enter email and password."; return@AuthScreen }
+                        busy = true
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                val result = api.login(email.trim(), password)
+                                api.token = result.getString("access_token")
+                                val workspace = result.optJSONObject("workspace")
+                                api.workspaceId = workspace?.getString("id") ?: result.optJSONArray("workspaces")?.takeIf { it.length() > 0 }?.getJSONObject(0)?.getString("id")
+                                if (api.workspaceId.isNullOrBlank()) error = "No active workspace returned by server."
+                                else {
+                                    securePrefs.edit().putString("token", api.token).putString("workspace_id", api.workspaceId).apply()
+                                    workspaceId = api.workspaceId; signedIn = true; error = null
                                 }
-                            }
-
-                            if (api.workspaceId.isNullOrBlank()) {
-                                error("No active workspace returned by server")
-                            } else {
-                                workspaceId = api.workspaceId
-                                securePrefs.edit().putString("workspace_id", api.workspaceId).apply()
-                                signedIn = true
-                                error = null
-                                loadProjects()
-                            }
-                        } catch (e: Exception) {
-                            error = e.message
-                        } finally {
-                            busy = false
+                            } catch (e: Exception) { error = e.message ?: "Sign in failed." }
+                            finally { busy = false }
                         }
-                    }
-                }
-            } else {
-                RegisterScreen(
-                        workspace = registerWorkspace, onWorkspace = { registerWorkspace = it },
-                        name = registerName, onName = { registerName = it },
-                        email = registerEmail, onEmail = { registerEmail = it },
-                        password = registerPassword, onPassword = { registerPassword = it },
-                        confirm = registerConfirm, onConfirm = { registerConfirm = it },
-                        error = error, busy = busy,
-                        onBackToLogin = { authMode = "login"; error = null }
-                    ) {
-                        val name = registerName.trim()
-                        val mail = registerEmail.trim()
-                        val workspace = registerWorkspace.trim()
+                    },
+                    onRegister = {
+                        val name = registerName.trim(); val mail = registerEmail.trim(); val workspace = registerWorkspace.trim()
                         when {
                             name.isBlank() -> error = "Enter your full name."
-                            mail.isBlank() -> error = "Enter your email address."
-                            !mail.contains("@") -> error = "Enter a valid email address."
+                            mail.isBlank() || !mail.contains("@") -> error = "Enter a valid email address."
                             registerPassword.length < 12 -> error = "Password must be at least 12 characters."
                             registerPassword != registerConfirm -> error = "Passwords do not match."
                             workspace.isBlank() -> error = "Enter a workspace name."
@@ -295,20 +273,16 @@ private fun ProjectManagerApp() {
                                 scope.launch(Dispatchers.IO) {
                                     try {
                                         val result = api.register(name, mail, registerPassword, workspace)
-                                    error = result.optString("message", "Account request submitted. Please wait for administrator approval before signing in.")
-                                    email = registerEmail.trim()
-                                    password = ""
-                                    registerPassword = ""
-                                    registerConfirm = ""
-                                    authMode = "login"
-                                    } catch (e: Exception) {
-                                        error = e.message
-                                    } finally { busy = false }
+                                        error = result.optString("message", "Account request submitted. Check your email and wait for administrator approval.")
+                                        email = mail; password = ""; registerPassword = ""; registerConfirm = ""
+                                        authTab = "login"
+                                    } catch (e: Exception) { error = e.message ?: "Registration failed." }
+                                    finally { busy = false }
                                 }
                             }
                         }
                     }
-                }
+                )
             } else {
                 Dashboard(
                     projects = projects,
@@ -434,108 +408,91 @@ private fun ProjectManagerApp() {
 }
 
 @Composable
-private fun AuthShell(title: String, subtitle: String, content: @Composable ColumnScope.() -> Unit) {
-    val transition = rememberInfiniteTransition(label = "rssRoyalBackground")
-    val shift by transition.animateFloat(
-        initialValue = -900f,
-        targetValue = 1800f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 9000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "rssRoyalBackgroundShift"
+private fun AnimatedRoyalBackground(content: @Composable BoxScope.() -> Unit) {
+    val transition = rememberInfiniteTransition(label = "rssRoyal")
+    val shift by transition.animateFloat(-900f, 1800f, infiniteRepeatable(tween(9000, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "shift")
+    val gradient = Brush.linearGradient(
+        listOf(Color(0xFF283593), Color(0xFF7E57C2), Color(0xFF00ACC1), Color(0xFF26A69A), Color(0xFFE0F7FA)),
+        Offset(0f, shift), Offset(1200f, shift + 1200f)
     )
-    val royalGradient = Brush.linearGradient(
-        colors = listOf(Color(0xFF1A237E), Color(0xFF5E35B1), Color(0xFF00ACC1), Color(0xFF26A69A), Color(0xFFE8F5E9)),
-        start = Offset(0f, shift),
-        end = Offset(1200f, shift + 1200f)
-    )
-    Box(Modifier.fillMaxSize().background(royalGradient)) {
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(Modifier.height(8.dp))
-            Image(
-                painter = painterResource(id = R.drawable.rss_ai_project_manager_logo),
-                contentDescription = "RSS AI Project Manager logo",
-                modifier = Modifier.size(width = 150.dp, height = 92.dp),
-                contentScale = ContentScale.Fit
-            )
-            Text(
-                "RSS AI PROJECT MANAGER",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(16.dp))
-            Card(
-                Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.96f)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
-            ) {
-                Column(
-                    Modifier.fillMaxWidth().padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(13.dp),
-                    content = {
-                        Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color(0xFF182052), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF5F6368), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                        Spacer(Modifier.height(4.dp))
-                        content()
-                    }
-                )
+    Box(Modifier.fillMaxSize().background(gradient), content = content)
+}
+
+@Composable
+private fun IntroFlowScreen(onFinish: () -> Unit) {
+    var page by remember { mutableStateOf(0) }
+    val titles = listOf("Manage Every RSS Project", "Turn Requirements Into Tasks", "Let AI Execute", "Track Progress Clearly")
+    val bodies = listOf("One command center for your RSS project portfolio.", "Capture requirements, priorities and next actions in one place.", "Connect RSS Core and automation so approved work can move forward.", "Monitor projects, tasks and execution status from your dashboard.")
+    AnimatedRoyalBackground {
+        Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Image(painterResource(R.drawable.rss_ai_project_manager_logo), "RSS AI Project Manager logo", Modifier.size(190.dp), ContentScale.Fit)
+            Spacer(Modifier.height(28.dp))
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(30.dp), colors = CardDefaults.cardColors(Color.White.copy(alpha=.96f))) {
+                Column(Modifier.padding(26.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Text(titles[page], style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color(0xFF182052), textAlign = TextAlign.Center)
+                    Text(bodies[page], textAlign = TextAlign.Center, color = Color(0xFF5F6368))
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) { repeat(titles.size) { Text(if (it == page) "●" else "○", color = Color(0xFF3949AB)) } }
+                    Button(onClick = { if (page == titles.lastIndex) onFinish() else page++ }, Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) { Text(if (page == titles.lastIndex) "Get Started" else "Next") }
+                    if (page < titles.lastIndex) TextButton(onClick = onFinish) { Text("Skip") }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun IntroScreen(onContinue: () -> Unit) {
-    AuthShell("Welcome to RSS AI Project Manager", "Your colorful command center for managing RSS projects.") {
-        Text("Plan • Coordinate • Execute", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF3949AB), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-        Text("Keep projects, requirements, tasks and AI execution connected through RSS Core and RAY.", color = Color(0xFF5F6368), textAlign = TextAlign.Center)
-        Button(onClick = onContinue, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) { Text("Get Started") }
-    }
-}
-
-@Composable
-private fun LoginScreen(
+private fun AuthScreen(
+    tab: String, onTab: (String) -> Unit,
     baseUrl: String, onBaseUrl: (String) -> Unit,
-    email: String, onEmail: (String) -> Unit,
-    password: String, onPassword: (String) -> Unit,
-    error: String?, busy: Boolean,
-    onCreateAccount: () -> Unit, onLogin: () -> Unit
+    loginEmail: String, onLoginEmail: (String) -> Unit,
+    loginPassword: String, onLoginPassword: (String) -> Unit,
+    registerName: String, onRegisterName: (String) -> Unit,
+    registerEmail: String, onRegisterEmail: (String) -> Unit,
+    registerPassword: String, onRegisterPassword: (String) -> Unit,
+    registerConfirm: String, onRegisterConfirm: (String) -> Unit,
+    registerWorkspace: String, onRegisterWorkspace: (String) -> Unit,
+    error: String?, busy: Boolean, onLogin: () -> Unit, onRegister: () -> Unit
 ) {
-    AuthShell("Welcome back", "Sign in securely to continue to your RSS workspace.") {
-        OutlinedTextField(baseUrl, onBaseUrl, label = { Text("Project Manager API URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
-        OutlinedTextField(email, onEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
-        OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
-        Button(onClick = onLogin, enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) { Text(if (busy) "Signing in..." else "Sign in") }
-        OutlinedButton(onClick = onCreateAccount, enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) { Text("Create new account") }
-        if (error != null) Text(error, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-    }
-}
-
-@Composable
-private fun RegisterScreen(
-    workspace: String, onWorkspace: (String) -> Unit,
-    name: String, onName: (String) -> Unit,
-    email: String, onEmail: (String) -> Unit,
-    password: String, onPassword: (String) -> Unit,
-    confirm: String, onConfirm: (String) -> Unit,
-    error: String?, busy: Boolean,
-    onBackToLogin: () -> Unit, onRegister: () -> Unit
-) {
-    AuthShell("Create your RSS account", "Request access to RSS AI Project Manager. Approval is required before sign in.") {
-        OutlinedTextField(name, onName, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
-        OutlinedTextField(workspace, onWorkspace, label = { Text("Workspace name") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
-        OutlinedTextField(email, onEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
-        OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
-        OutlinedTextField(confirm, onConfirm, label = { Text("Confirm password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
-        Button(onClick = onRegister, enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) { Text(if (busy) "Submitting request..." else "Request account") }
-        TextButton(onClick = onBackToLogin, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Already have an account? Sign in") }
-        if (error != null) Text(error, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+    var policyAccepted by remember { mutableStateOf(false) }
+    AnimatedRoyalBackground {
+        Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Image(painterResource(R.drawable.rss_ai_project_manager_logo), "RSS AI Project Manager logo", Modifier.size(width=150.dp,height=92.dp), ContentScale.Fit)
+            Text("RSS AI PROJECT MANAGER", color=Color.White, fontWeight=FontWeight.Bold)
+            Spacer(Modifier.height(14.dp))
+            Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(28.dp), colors=CardDefaults.cardColors(Color.White.copy(alpha=.97f)), elevation=CardDefaults.cardElevation(10.dp)) {
+                Column(Modifier.padding(22.dp), verticalArrangement=Arrangement.spacedBy(11.dp)) {
+                    Text("Welcome to RSS AI Project Manager", style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold, color=Color(0xFF182052), textAlign=TextAlign.Center, modifier=Modifier.fillMaxWidth())
+                    Row(Modifier.fillMaxWidth().background(Color(0xFFE8EAF6), RoundedCornerShape(16.dp)).padding(4.dp)) {
+                        listOf("login" to "Sign In", "register" to "Create Account").forEach { (key,label) ->
+                            Button(onClick={onTab(key)}, Modifier.weight(1f), shape=RoundedCornerShape(12.dp), colors=ButtonDefaults.buttonColors(containerColor=if(tab==key) Color(0xFF3949AB) else Color.Transparent, contentColor=if(tab==key) Color.White else Color(0xFF3949AB))) { Text(label) }
+                        }
+                    }
+                    androidx.compose.animation.AnimatedContent(targetState=tab, label="authTab") { selected ->
+                        Column(verticalArrangement=Arrangement.spacedBy(11.dp)) {
+                            if(selected=="login") {
+                                OutlinedTextField(baseUrl,onBaseUrl,label={Text("Project Manager API URL")},Modifier.fillMaxWidth(),singleLine=true,shape=RoundedCornerShape(14.dp))
+                                OutlinedTextField(loginEmail,onLoginEmail,label={Text("Email address")},Modifier.fillMaxWidth(),singleLine=true,shape=RoundedCornerShape(14.dp),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email))
+                                OutlinedTextField(loginPassword,onLoginPassword,label={Text("Password")},Modifier.fillMaxWidth(),singleLine=true,visualTransformation=PasswordVisualTransformation(),shape=RoundedCornerShape(14.dp))
+                                Button(onClick=onLogin,enabled=!busy&&loginEmail.isNotBlank()&&loginPassword.isNotBlank(),Modifier.fillMaxWidth().height(52.dp),shape=RoundedCornerShape(16.dp)){Text(if(busy)"Signing in…" else "Sign in")}
+                            } else {
+                                OutlinedTextField(registerName,onRegisterName,label={Text("Full name")},Modifier.fillMaxWidth(),singleLine=true,shape=RoundedCornerShape(14.dp))
+                                OutlinedTextField(registerWorkspace,onRegisterWorkspace,label={Text("Workspace name")},Modifier.fillMaxWidth(),singleLine=true,shape=RoundedCornerShape(14.dp))
+                                OutlinedTextField(registerEmail,onRegisterEmail,label={Text("Email address")},Modifier.fillMaxWidth(),singleLine=true,shape=RoundedCornerShape(14.dp),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email))
+                                OutlinedTextField(registerPassword,onRegisterPassword,label={Text("Password")},Modifier.fillMaxWidth(),singleLine=true,visualTransformation=PasswordVisualTransformation(),shape=RoundedCornerShape(14.dp))
+                                OutlinedTextField(registerConfirm,onRegisterConfirm,label={Text("Confirm password")},Modifier.fillMaxWidth(),singleLine=true,visualTransformation=PasswordVisualTransformation(),shape=RoundedCornerShape(14.dp))
+                                Row(Modifier.fillMaxWidth().clickable(enabled=!busy){policyAccepted=!policyAccepted},verticalAlignment=Alignment.CenterVertically) {
+                                    Checkbox(checked=policyAccepted,onCheckedChange={policyAccepted=it},enabled=!busy)
+                                    Text("I agree to the Terms of Service and Privacy Policy", color=Color(0xFF3949AB))
+                                }
+                                Button(onClick=onRegister,enabled=!busy&&policyAccepted,Modifier.fillMaxWidth().height(52.dp),shape=RoundedCornerShape(16.dp)){Text(if(busy)"Submitting request…" else "Request account")}
+                                if(!policyAccepted) Text("Please accept the Terms of Service and Privacy Policy to continue.", color=Color(0xFFC62828), style=MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                    if(error!=null) Text(error,color=if(tab=="register" && error.contains("submitted",true)) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth())
+                }
+            }
+        }
     }
 }
 
