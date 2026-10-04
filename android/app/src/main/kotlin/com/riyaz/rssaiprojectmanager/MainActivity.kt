@@ -13,9 +13,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.ContentScale
@@ -427,8 +434,20 @@ private fun ProjectManagerApp() {
 
 @Composable
 private fun AuthShell(title: String, subtitle: String, content: @Composable ColumnScope.() -> Unit) {
-    val royalGradient = Brush.verticalGradient(
-        listOf(Color(0xFF1A237E), Color(0xFF5E35B1), Color(0xFF00ACC1), Color(0xFFE8F5E9))
+    val transition = rememberInfiniteTransition(label = "rssRoyalBackground")
+    val shift by transition.animateFloat(
+        initialValue = -900f,
+        targetValue = 1800f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 9000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "rssRoyalBackgroundShift"
+    )
+    val royalGradient = Brush.linearGradient(
+        colors = listOf(Color(0xFF1A237E), Color(0xFF5E35B1), Color(0xFF00ACC1), Color(0xFF26A69A), Color(0xFFE8F5E9)),
+        start = Offset(0f, shift),
+        end = Offset(1200f, shift + 1200f)
     )
     Box(Modifier.fillMaxSize().background(royalGradient)) {
         Column(
