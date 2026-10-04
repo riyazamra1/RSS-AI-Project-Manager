@@ -181,7 +181,7 @@ private const val DEFAULT_AUTH_CONFIG = """{
   "submitting_label": "Submitting request…",
   "signing_in_label": "Signing in…",
   "primary_color_hex": "#3949AB"
-}
+}"""
 
 private fun fetchRemoteAuthConfig(baseUrl: String): String {
     val request = Request.Builder()
@@ -423,7 +423,9 @@ private fun ProjectManagerApp() {
                         scope.launch(Dispatchers.IO) {
                             try {
                                 val result = api.goAhead()
-                                error = "Execution: ${result.optString("status", "unknown")}  Task: ${result.optString("task_id", "none")}"
+                                val executionStatus = result.optString("status", "unknown")
+                                val taskId = result.optString("task_id", "none")
+                                error = "Execution: $executionStatus  Task: $taskId"
                                 selected?.let { loadTasks(it) }
                             } catch (e: Exception) {
                                 error = e.message
