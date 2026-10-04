@@ -468,17 +468,14 @@ private fun AuthScreen(
                         }
                     }
                     if (tab == "login") {
-                        androidx.compose.animation.AnimatedVisibility(visible = true) {
-                            Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
                                 OutlinedTextField(baseUrl, onBaseUrl, label={Text("Project Manager API URL")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp))
                                 OutlinedTextField(loginEmail, onLoginEmail, label={Text("Email address")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp), keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email))
                                 OutlinedTextField(loginPassword, onLoginPassword, label={Text("Password")}, Modifier.fillMaxWidth(), singleLine=true, visualTransformation=PasswordVisualTransformation(), shape=RoundedCornerShape(14.dp))
                                 Button(onClick=onLogin, enabled=!busy&&loginEmail.isNotBlank()&&loginPassword.isNotBlank(), modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) { Text(if(busy) "Signing in…" else "Sign in") }
-                            }
                         }
                     } else {
-                        androidx.compose.animation.AnimatedVisibility(visible = true) {
-                            Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
                                 OutlinedTextField(registerName, onRegisterName, label={Text("Full name")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp))
                                 OutlinedTextField(registerWorkspace, onRegisterWorkspace, label={Text("Workspace name")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp))
                                 OutlinedTextField(registerEmail, onRegisterEmail, label={Text("Email address")}, Modifier.fillMaxWidth(), singleLine=true, shape=RoundedCornerShape(14.dp), keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email))
@@ -490,7 +487,6 @@ private fun AuthScreen(
                                 }
                                 Button(onClick=onRegister, enabled=!busy&&policyAccepted, modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) { Text(if(busy) "Submitting request…" else "Request account") }
                                 if(!policyAccepted) Text("Please accept the Terms of Service and Privacy Policy to continue.", color=Color(0xFFC62828), style=MaterialTheme.typography.bodySmall)
-                            }
                         }
                     }
                     if(error!=null) Text(error,color=if(tab=="register" && error.contains("submitted",true)) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth())
