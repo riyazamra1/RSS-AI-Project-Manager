@@ -237,6 +237,7 @@ private fun ProjectManagerApp() {
     var success by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var authConfig by remember { mutableStateOf(RemoteAuthConfig.fromJson(DEFAULT_AUTH_CONFIG)) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(baseUrl) {
         val cached = securePrefs.getString("auth_ui_config", null)
@@ -252,7 +253,6 @@ private fun ProjectManagerApp() {
     }
 
     val api = remember(baseUrl) { ProjectManagerApi(baseUrl).also { it.token = securePrefs.getString("token", null); it.workspaceId = workspaceId } }
-    val scope = rememberCoroutineScope()
 
     var projects by remember { mutableStateOf(emptyList<Project>()) }
     var selected by remember { mutableStateOf<Project?>(null) }
@@ -553,12 +553,13 @@ private fun AuthScreen(
     var policyAccepted by remember { mutableStateOf(false) }
     AnimatedRoyalBackground {
         Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Image(painter = painterResource(R.drawable.rss_ai_project_manager_logo), contentDescription = "RSS AI Project Manager logo", modifier = Modifier.size(width = 150.dp, height = 92.dp), contentScale = ContentScale.Fit)
+            AsyncImage(model = authConfig.logoUrl, contentDescription = "RSS AI Project Manager logo", modifier = Modifier.size(width = 150.dp, height = 92.dp), contentScale = ContentScale.Fit, error = painterResource(R.drawable.rss_ai_project_manager_logo), placeholder = painterResource(R.drawable.rss_ai_project_manager_logo))
             Text("RSS AI PROJECT MANAGER", color=Color.White, fontWeight=FontWeight.Bold)
             Spacer(Modifier.height(14.dp))
             Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(28.dp), colors=CardDefaults.cardColors(Color.White.copy(alpha=.97f)), elevation=CardDefaults.cardElevation(10.dp)) {
                 Column(Modifier.padding(22.dp), verticalArrangement=Arrangement.spacedBy(11.dp)) {
                     Text(if (tab == "login") authConfig.title else authConfig.registrationTitle, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold, color=Color(0xFF182052), textAlign=TextAlign.Center, modifier=Modifier.fillMaxWidth())
+                    Text(if (tab == "login") authConfig.subtitle else authConfig.registrationSubtitle, color=Color(0xFF5F6368), textAlign=TextAlign.Center, modifier=Modifier.fillMaxWidth())
                     success?.let { Text(it, color = Color(0xFF137333), fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
                     Row(Modifier.fillMaxWidth().background(Color(0xFFE8EAF6), RoundedCornerShape(16.dp)).padding(4.dp)) {
