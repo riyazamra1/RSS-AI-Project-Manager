@@ -64,7 +64,13 @@ private class ProjectManagerApi(private val baseUrl: String) {
         }
         client.newCall(builder.build()).execute().use { response ->
             val text = response.body?.string().orEmpty()
-            if (!response.isSuccessful) error("HTTP ${response.code}: ${text.take(500)}")
+            if (!response.isSuccessful) {
+                val serverMessage = runCatching {
+                    JSONObject(text).optString("detail").ifBlank { JSONObject(text).optString("message") }
+                }.getOrNull().orEmpty()
+                val message = serverMessage.ifBlank { "Request failed. Please try again." }
+                error("HTTP ${response.code}: $message")
+            }
             return text
         }
     }
@@ -557,50 +563,220 @@ private fun AuthScreen(
     val primaryColor = remember(authConfig.primaryColorHex) {
         runCatching { Color(android.graphics.Color.parseColor(authConfig.primaryColorHex)) }.getOrDefault(Color(0xFF3949AB))
     }
+
     AnimatedRoyalBackground {
-        Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            AsyncImage(model = authConfig.logoUrl, contentDescription = "RSS AI Project Manager logo", modifier = Modifier.size(width = 150.dp, height = 92.dp), contentScale = ContentScale.Fit, error = painterResource(R.drawable.rss_ai_project_manager_logo), placeholder = painterResource(R.drawable.rss_ai_project_manager_logo))
-            Text("RSS AI PROJECT MANAGER", color=Color.White, fontWeight=FontWeight.Bold)
-            Spacer(Modifier.height(14.dp))
-            Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(28.dp), colors=CardDefaults.cardColors(Color.White.copy(alpha=.97f)), elevation=CardDefaults.cardElevation(10.dp)) {
-                Column(Modifier.padding(22.dp), verticalArrangement=Arrangement.spacedBy(11.dp)) {
-                    Text(if (tab == "login") authConfig.title else authConfig.registrationTitle, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold, color=Color(0xFF182052), textAlign=TextAlign.Center, modifier=Modifier.fillMaxWidth())
-                    Text(if (tab == "login") authConfig.subtitle else authConfig.registrationSubtitle, color=Color(0xFF5F6368), textAlign=TextAlign.Center, modifier=Modifier.fillMaxWidth())
-                    success?.let { Text(it, color = Color(0xFF137333), fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
-                    error?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
-                    Row(Modifier.fillMaxWidth().background(Color(0xFFE8EAF6), RoundedCornerShape(16.dp)).padding(4.dp)) {
-                        listOf("login" to "Sign In", "register" to "Create Account").forEach { (key,label) ->
-                            Button(onClick={onTab(key)}, Modifier.weight(1f), shape=RoundedCornerShape(12.dp), colors=ButtonDefaults.buttonColors(containerColor=if(tab==key) primaryColor else Color.Transparent, contentColor=if(tab==key) Color.White else primaryColor)) { Text(if (key == "login") authConfig.signInLabel else authConfig.createAccountLabel) }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+                .navigationBarsPadding()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(Modifier.height(8.dp))
+                AsyncImage(
+                    model = authConfig.logoUrl,
+                    contentDescription = "RSS AI Project Manager logo",
+                    modifier = Modifier.size(width = 132.dp, height = 78.dp),
+                    contentScale = ContentScale.Fit,
+                    error = painterResource(R.drawable.rss_ai_project_manager_logo),
+                    placeholder = painterResource(R.drawable.rss_ai_project_manager_logo)
+                )
+                Text("RSS AI PROJECT MANAGER", color = Color.White, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(10.dp))
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 520.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(Color.White.copy(alpha = .97f)),
+                    elevation = CardDefaults.cardElevation(10.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            if (tab == "login") authConfig.title else authConfig.registrationTitle,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF182052),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            if (tab == "login") authConfig.subtitle else authConfig.registrationSubtitle,
+                            color = Color(0xFF5F6368),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFFE8EAF6), RoundedCornerShape(14.dp))
+                                .padding(4.dp)
+                        ) {
+                            listOf("login" to authConfig.signInLabel, "register" to authConfig.createAccountLabel).forEach { (key, label) ->
+                                Button(
+                                    onClick = { onTab(key) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(11.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (tab == key) primaryColor else Color.Transparent,
+                                        contentColor = if (tab == key) Color.White else primaryColor
+                                    )
+                                ) { Text(label) }
+                            }
                         }
-                    }
-                    if (tab == "login") {
-                        Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                                OutlinedTextField(value = baseUrl, onValueChange = onBaseUrl, label = { Text("Project Manager API URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
-                                OutlinedTextField(value = loginEmail, onValueChange = onLoginEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
-                                OutlinedTextField(value = loginPassword, onValueChange = onLoginPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
-                                Button(onClick=onLogin, enabled=!busy&&loginEmail.isNotBlank()&&loginPassword.isNotBlank(), modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) { Text(if(busy) authConfig.signingInLabel else authConfig.loginButtonLabel) }
-                        }
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                                OutlinedTextField(value = registerName, onValueChange = onRegisterName, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
-                                OutlinedTextField(value = registerWorkspace, onValueChange = onRegisterWorkspace, label = { Text("Workspace name") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
-                                OutlinedTextField(value = registerEmail, onValueChange = onRegisterEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
-                                OutlinedTextField(value = registerPassword, onValueChange = onRegisterPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
-                                OutlinedTextField(value = registerConfirm, onValueChange = onRegisterConfirm, label = { Text("Confirm password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
-                                Row(Modifier.fillMaxWidth().clickable(enabled=!busy){policyAccepted=!policyAccepted}, verticalAlignment=Alignment.CenterVertically) {
-                                    Checkbox(checked=policyAccepted, onCheckedChange={policyAccepted=it}, enabled=!busy)
-                                    Text(authConfig.policyLabel, color=primaryColor)
+
+                        if (tab == "login") {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedTextField(
+                                    value = baseUrl,
+                                    onValueChange = onBaseUrl,
+                                    label = { Text("Project Manager API URL") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                OutlinedTextField(
+                                    value = loginEmail,
+                                    onValueChange = onLoginEmail,
+                                    label = { Text("Email address") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(14.dp),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                                )
+                                OutlinedTextField(
+                                    value = loginPassword,
+                                    onValueChange = onLoginPassword,
+                                    label = { Text("Password") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                Button(
+                                    onClick = onLogin,
+                                    enabled = !busy && loginEmail.isNotBlank() && loginPassword.isNotBlank(),
+                                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                                    shape = RoundedCornerShape(16.dp)
+                                ) { Text(if (busy) authConfig.signingInLabel else authConfig.loginButtonLabel) }
+                            }
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedTextField(
+                                    value = registerName,
+                                    onValueChange = onRegisterName,
+                                    label = { Text("Full name") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                OutlinedTextField(
+                                    value = registerWorkspace,
+                                    onValueChange = onRegisterWorkspace,
+                                    label = { Text("Workspace name") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                OutlinedTextField(
+                                    value = registerEmail,
+                                    onValueChange = onRegisterEmail,
+                                    label = { Text("Email address") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(14.dp),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                                )
+                                OutlinedTextField(
+                                    value = registerPassword,
+                                    onValueChange = onRegisterPassword,
+                                    label = { Text("Password") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                OutlinedTextField(
+                                    value = registerConfirm,
+                                    onValueChange = onRegisterConfirm,
+                                    label = { Text("Confirm password") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(enabled = !busy) { policyAccepted = !policyAccepted },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = policyAccepted,
+                                        onCheckedChange = { policyAccepted = it },
+                                        enabled = !busy
+                                    )
+                                    Text(authConfig.policyLabel, color = primaryColor)
                                 }
-                                Button(onClick=onRegister, enabled=!busy&&policyAccepted, modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) { Text(if(busy) authConfig.submittingLabel else authConfig.registerButtonLabel) }
-                                if(!policyAccepted) Text(authConfig.policyRequiredMessage, color=Color(0xFFC62828), style=MaterialTheme.typography.bodySmall)
+                                Button(
+                                    onClick = onRegister,
+                                    enabled = !busy && policyAccepted,
+                                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                                    shape = RoundedCornerShape(16.dp)
+                                ) { Text(if (busy) authConfig.submittingLabel else authConfig.registerButtonLabel) }
+                                if (!policyAccepted) {
+                                    Text(
+                                        authConfig.policyRequiredMessage,
+                                        color = Color(0xFFC62828),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
                         }
+
+                        success?.let {
+                            Text(
+                                it,
+                                color = Color(0xFF137333),
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        error?.let {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFFFFEBEE)
+                            ) {
+                                Text(
+                                    it,
+                                    color = Color(0xFFC62828),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(2.dp))
                     }
-                    if(error!=null) Text(error,color=if(tab=="register" && error.contains("submitted",true)) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth())
                 }
+                Spacer(Modifier.height(12.dp))
             }
         }
     }
 }
+
 
 @Composable
 private fun Dashboard(
@@ -798,18 +974,3 @@ private fun Dashboard(
             items(tasks) { task ->
                 ListItem(
                     headlineContent = { Text(task.title) },
-                    supportingContent = { Text("Status: ${task.status}") }
-                )
-            }
-        }
-
-        if (error != null) {
-            item {
-                Text(
-                    error,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-    }
-}
