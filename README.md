@@ -65,6 +65,10 @@ Storage |          v             v
 
 GitHub is the source of truth for project repositories, but GitHub Actions is **not required for runtime scheduling or execution**. Cloudflare/RSS Core/RAY is the intended runtime path because GitHub Actions limits must not block autonomous operation.
 
+## RSS KIT authentication UI
+
+The Android authentication surface uses the RSS KIT remote-auth contract. The native authentication engine remains local and secure, while public UI configuration is loaded from `/auth/ui-config` and cached on-device. Login/registration copy, logo URL, and supported visual tokens can therefore be updated server-side without reinstalling the APK. Native authentication logic or Android dependency changes still require an APK update.
+
 ## RSS requirements
 
 This repository is also the control specification for RSS projects. Project requirements must be stored and applied per project without cross-project leakage. On project resume, the latest project requirements and repository state must be inspected before execution.
