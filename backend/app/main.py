@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.ai import router as ai_router
 from app.api.auto_chat import router as auto_chat_router
 from app.api.auth import router as auth_router
+from app.api.auth_ui import router as auth_ui_router
 from app.api.internal import router as internal_router
 from app.api.conversations import router as conversations_router
 from app.api.memory import router as memory_router
@@ -35,6 +36,7 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(auth_ui_router)
 app.include_router(internal_router)
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(project_discovery_router)
