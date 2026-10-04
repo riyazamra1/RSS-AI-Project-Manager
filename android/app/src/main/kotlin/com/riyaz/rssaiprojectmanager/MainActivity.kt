@@ -13,6 +13,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -422,17 +425,44 @@ private fun ProjectManagerApp() {
 
 @Composable
 private fun AuthShell(title: String, subtitle: String, content: @Composable ColumnScope.() -> Unit) {
-    Surface(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(12.dp))
-            AsyncImage(model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png", contentDescription = "RSS AI Project Manager logo", modifier = Modifier.size(width = 180.dp, height = 110.dp), contentScale = ContentScale.Fit)
-            Spacer(Modifier.height(18.dp))
-            Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(6.dp))
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(24.dp))
-            Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
-                Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+    val royalGradient = Brush.verticalGradient(
+        listOf(Color(0xFF1A237E), Color(0xFF5E35B1), Color(0xFF00ACC1), Color(0xFFE8F5E9))
+    )
+    Box(Modifier.fillMaxSize().background(royalGradient)) {
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(Modifier.height(8.dp))
+            AsyncImage(
+                model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png",
+                contentDescription = "RSS AI Project Manager logo",
+                modifier = Modifier.size(width = 150.dp, height = 92.dp),
+                contentScale = ContentScale.Fit
+            )
+            Text(
+                "RSS AI PROJECT MANAGER",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(16.dp))
+            Card(
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.96f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(13.dp),
+                    content = {
+                        Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color(0xFF182052), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF5F6368), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(4.dp))
+                        content()
+                    }
+                )
             }
         }
     }
@@ -440,14 +470,10 @@ private fun AuthShell(title: String, subtitle: String, content: @Composable Colu
 
 @Composable
 private fun IntroScreen(onContinue: () -> Unit) {
-    AuthShell("RSS AI Project Manager", "Your central command center for RSS software projects.") {
-        Text("Plan. Coordinate. Execute.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Text("Manage projects and tasks while keeping AI execution connected to RSS Core and RAY.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        listOf("Project and requirement management", "AI execution tracking through RSS Core / RAY", "Synchronized project and task state").forEach {
-            Text("•  $it", modifier = Modifier.fillMaxWidth())
-        }
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
+    AuthShell("Welcome to RSS AI Project Manager", "Your colorful command center for managing RSS projects.") {
+        Text("Plan • Coordinate • Execute", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF3949AB), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+        Text("Keep projects, requirements, tasks and AI execution connected through RSS Core and RAY.", color = Color(0xFF5F6368), textAlign = TextAlign.Center)
+        Button(onClick = onContinue, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) { Text("Get Started") }
     }
 }
 
@@ -459,12 +485,12 @@ private fun LoginScreen(
     error: String?, busy: Boolean,
     onCreateAccount: () -> Unit, onLogin: () -> Unit
 ) {
-    AuthShell("Welcome back", "Sign in to continue to your RSS workspace.") {
-        OutlinedTextField(baseUrl, onBaseUrl, label = { Text("Project Manager API URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(email, onEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
-        Button(onClick = onLogin, enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Signing in..." else "Sign in") }
-        OutlinedButton(onClick = onCreateAccount, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Create account") }
+    AuthShell("Welcome back", "Sign in securely to continue to your RSS workspace.") {
+        OutlinedTextField(baseUrl, onBaseUrl, label = { Text("Project Manager API URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
+        OutlinedTextField(email, onEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
+        OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
+        Button(onClick = onLogin, enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) { Text(if (busy) "Signing in..." else "Sign in") }
+        OutlinedButton(onClick = onCreateAccount, enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) { Text("Create new account") }
         if (error != null) Text(error, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
 }
@@ -479,14 +505,14 @@ private fun RegisterScreen(
     error: String?, busy: Boolean,
     onBackToLogin: () -> Unit, onRegister: () -> Unit
 ) {
-    AuthShell("Create your RSS account", "Submit your account request. An administrator must approve it before you can sign in.") {
-        OutlinedTextField(name, onName, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(workspace, onWorkspace, label = { Text("Workspace name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(email, onEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
-        OutlinedTextField(confirm, onConfirm, label = { Text("Confirm password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
-        Button(onClick = onRegister, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Submitting..." else "Request account") }
-        TextButton(onClick = onBackToLogin, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Back to sign in") }
+    AuthShell("Create your RSS account", "Request access to RSS AI Project Manager. Approval is required before sign in.") {
+        OutlinedTextField(name, onName, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
+        OutlinedTextField(workspace, onWorkspace, label = { Text("Workspace name") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
+        OutlinedTextField(email, onEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
+        OutlinedTextField(password, onPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
+        OutlinedTextField(confirm, onConfirm, label = { Text("Confirm password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
+        Button(onClick = onRegister, enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) { Text(if (busy) "Submitting request..." else "Request account") }
+        TextButton(onClick = onBackToLogin, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Already have an account? Sign in") }
         if (error != null) Text(error, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
 }
