@@ -46,4 +46,14 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
 
+
+// Bundle the original RSS AI Project Manager logo from the repository's web asset.
+val copyRssLogo by tasks.registering(Copy::class) {
+    from(rootProject.file("../web/assets/rss-ai-project-manager-logo.png"))
+    into(layout.buildDirectory.dir("generated/res/rssLogo/drawable"))
+    rename { "rss_ai_project_manager_logo.png" }
+}
+android.sourceSets.getByName("main").res.srcDir(layout.buildDirectory.dir("generated/res/rssLogo"))
+tasks.named("preBuild").configure { dependsOn(copyRssLogo) }
+
 // RSS AUTO build trigger: Android APK verification.
