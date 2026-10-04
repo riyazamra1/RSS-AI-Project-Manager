@@ -115,6 +115,83 @@ private class ProjectManagerApi(private val baseUrl: String) {
     fun logout(): JSONObject = JSONObject(request("/auth/logout", "POST"))
 }
 
+data class RemoteAuthConfig(
+    val version: Int = 1,
+    val kitVersion: String = "1.0.0",
+    val logoUrl: String = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png",
+    val title: String = "Welcome to RSS AI Project Manager",
+    val subtitle: String = "Secure access to your RSS workspace.",
+    val signInLabel: String = "Sign In",
+    val createAccountLabel: String = "Create Account",
+    val loginButtonLabel: String = "Sign in",
+    val registerButtonLabel: String = "Request account",
+    val registrationTitle: String = "Create your RSS account",
+    val registrationSubtitle: String = "Submit your account request. Verify your email and wait for administrator approval.",
+    val policyLabel: String = "I agree to the Terms of Service and Privacy Policy",
+    val policyRequiredMessage: String = "Please accept the Terms of Service and Privacy Policy to continue.",
+    val submittingLabel: String = "Submitting request…",
+    val signingInLabel: String = "Signing in…"
+) {
+    companion object {
+        fun fromJson(json: String): RemoteAuthConfig {
+            val o = JSONObject(json)
+            return RemoteAuthConfig(
+                version = o.optInt("version", 1),
+                kitVersion = o.optString("kit_version", "1.0.0"),
+                logoUrl = o.optString("logo_url", RemoteAuthConfig().logoUrl),
+                title = o.optString("title", RemoteAuthConfig().title),
+                subtitle = o.optString("subtitle", RemoteAuthConfig().subtitle),
+                signInLabel = o.optString("sign_in_label", RemoteAuthConfig().signInLabel),
+                createAccountLabel = o.optString("create_account_label", RemoteAuthConfig().createAccountLabel),
+                loginButtonLabel = o.optString("login_button_label", RemoteAuthConfig().loginButtonLabel),
+                registerButtonLabel = o.optString("register_button_label", RemoteAuthConfig().registerButtonLabel),
+                registrationTitle = o.optString("registration_title", RemoteAuthConfig().registrationTitle),
+                registrationSubtitle = o.optString("registration_subtitle", RemoteAuthConfig().registrationSubtitle),
+                policyLabel = o.optString("policy_label", RemoteAuthConfig().policyLabel),
+                policyRequiredMessage = o.optString("policy_required_message", RemoteAuthConfig().policyRequiredMessage),
+                submittingLabel = o.optString("submitting_label", RemoteAuthConfig().submittingLabel),
+                signingInLabel = o.optString("signing_in_label", RemoteAuthConfig().signingInLabel)
+            )
+        }
+    }
+}
+
+private const val DEFAULT_AUTH_CONFIG = """{
+  "version": 1,
+  "kit_version": "1.0.0",
+  "logo_url": "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png",
+  "title": "Welcome to RSS AI Project Manager",
+  "subtitle": "Secure access to your RSS workspace.",
+  "sign_in_label": "Sign In",
+  "create_account_label": "Create Account",
+  "login_button_label": "Sign in",
+  "register_button_label": "Request account",
+  "registration_title": "Create your RSS account",
+  "registration_subtitle": "Submit your account request. Verify your email and wait for administrator approval.",
+  "policy_label": "I agree to the Terms of Service and Privacy Policy",
+  "policy_required_message": "Please accept the Terms of Service and Privacy Policy to continue.",
+  "submitting_label": "Submitting request…",
+  "signing_in_label": "Signing in…"
+}
+
+private fun fetchRemoteAuthConfig(baseUrl: String): String {
+    val request = Request.Builder()
+        .url(baseUrl.trimEnd('/') + "/auth/ui-config")
+        .addHeader("Accept", "application/json")
+        .build()
+    OkHttpClient.Builder()
+        .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+        .callTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+        .newCall(request)
+        .execute()
+        .use { response ->
+            if (!response.isSuccessful) error("Remote auth config HTTP ${response.code}")
+            return response.body?.string().orEmpty()
+        }
+}
+
 data class Project(
     val id: String,
     val name: String,
@@ -159,6 +236,20 @@ private fun ProjectManagerApp() {
     var error by remember { mutableStateOf<String?>(null) }
     var success by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var authConfig by remember { mutableStateOf(RemoteAuthConfig.fromJson(DEFAULT_AUTH_CONFIG)) }
+
+    LaunchedEffect(baseUrl) {
+        val cached = securePrefs.getString("auth_ui_config", null)
+        if (!cached.isNullOrBlank()) runCatching { authConfig = RemoteAuthConfig.fromJson(cached) }
+        scope.launch(Dispatchers.IO) {
+            runCatching { fetchRemoteAuthConfig(baseUrl) }.onSuccess { json ->
+                runCatching { RemoteAuthConfig.fromJson(json) }.onSuccess { parsed ->
+                    securePrefs.edit().putString("auth_ui_config", json).apply()
+                    authConfig = parsed
+                }
+            }
+        }
+    }
 
     val api = remember(baseUrl) { ProjectManagerApi(baseUrl).also { it.token = securePrefs.getString("token", null); it.workspaceId = workspaceId } }
     val scope = rememberCoroutineScope()
@@ -242,6 +333,7 @@ private fun ProjectManagerApp() {
                     registerPassword = registerPassword, onRegisterPassword = { registerPassword = it },
                     registerConfirm = registerConfirm, onRegisterConfirm = { registerConfirm = it },
                     registerWorkspace = registerWorkspace, onRegisterWorkspace = { registerWorkspace = it },
+                    authConfig = authConfig,
                     error = error, success = success, busy = busy,
                     onLogin = {
                         if (email.isBlank() || password.isBlank()) { error = "Enter email and password."; return@AuthScreen }
@@ -455,6 +547,7 @@ private fun AuthScreen(
     registerPassword: String, onRegisterPassword: (String) -> Unit,
     registerConfirm: String, onRegisterConfirm: (String) -> Unit,
     registerWorkspace: String, onRegisterWorkspace: (String) -> Unit,
+    authConfig: RemoteAuthConfig,
     error: String?, success: String?, busy: Boolean, onLogin: () -> Unit, onRegister: () -> Unit
 ) {
     var policyAccepted by remember { mutableStateOf(false) }
@@ -465,12 +558,12 @@ private fun AuthScreen(
             Spacer(Modifier.height(14.dp))
             Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(28.dp), colors=CardDefaults.cardColors(Color.White.copy(alpha=.97f)), elevation=CardDefaults.cardElevation(10.dp)) {
                 Column(Modifier.padding(22.dp), verticalArrangement=Arrangement.spacedBy(11.dp)) {
-                    Text("Welcome to RSS AI Project Manager", style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold, color=Color(0xFF182052), textAlign=TextAlign.Center, modifier=Modifier.fillMaxWidth())
+                    Text(if (tab == "login") authConfig.title else authConfig.registrationTitle, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold, color=Color(0xFF182052), textAlign=TextAlign.Center, modifier=Modifier.fillMaxWidth())
                     success?.let { Text(it, color = Color(0xFF137333), fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
                     Row(Modifier.fillMaxWidth().background(Color(0xFFE8EAF6), RoundedCornerShape(16.dp)).padding(4.dp)) {
                         listOf("login" to "Sign In", "register" to "Create Account").forEach { (key,label) ->
-                            Button(onClick={onTab(key)}, Modifier.weight(1f), shape=RoundedCornerShape(12.dp), colors=ButtonDefaults.buttonColors(containerColor=if(tab==key) Color(0xFF3949AB) else Color.Transparent, contentColor=if(tab==key) Color.White else Color(0xFF3949AB))) { Text(label) }
+                            Button(onClick={onTab(key)}, Modifier.weight(1f), shape=RoundedCornerShape(12.dp), colors=ButtonDefaults.buttonColors(containerColor=if(tab==key) Color(0xFF3949AB) else Color.Transparent, contentColor=if(tab==key) Color.White else Color(0xFF3949AB))) { Text(if (key == "login") authConfig.signInLabel else authConfig.createAccountLabel) }
                         }
                     }
                     if (tab == "login") {
@@ -478,7 +571,7 @@ private fun AuthScreen(
                                 OutlinedTextField(value = baseUrl, onValueChange = onBaseUrl, label = { Text("Project Manager API URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp))
                                 OutlinedTextField(value = loginEmail, onValueChange = onLoginEmail, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(14.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
                                 OutlinedTextField(value = loginPassword, onValueChange = onLoginPassword, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
-                                Button(onClick=onLogin, enabled=!busy&&loginEmail.isNotBlank()&&loginPassword.isNotBlank(), modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) { Text(if(busy) "Signing in…" else "Sign in") }
+                                Button(onClick=onLogin, enabled=!busy&&loginEmail.isNotBlank()&&loginPassword.isNotBlank(), modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) { Text(if(busy) authConfig.signingInLabel else authConfig.loginButtonLabel) }
                         }
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
@@ -489,10 +582,10 @@ private fun AuthScreen(
                                 OutlinedTextField(value = registerConfirm, onValueChange = onRegisterConfirm, label = { Text("Confirm password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(14.dp))
                                 Row(Modifier.fillMaxWidth().clickable(enabled=!busy){policyAccepted=!policyAccepted}, verticalAlignment=Alignment.CenterVertically) {
                                     Checkbox(checked=policyAccepted, onCheckedChange={policyAccepted=it}, enabled=!busy)
-                                    Text("I agree to the Terms of Service and Privacy Policy", color=Color(0xFF3949AB))
+                                    Text(authConfig.policyLabel, color=Color(0xFF3949AB))
                                 }
-                                Button(onClick=onRegister, enabled=!busy&&policyAccepted, modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) { Text(if(busy) "Submitting request…" else "Request account") }
-                                if(!policyAccepted) Text("Please accept the Terms of Service and Privacy Policy to continue.", color=Color(0xFFC62828), style=MaterialTheme.typography.bodySmall)
+                                Button(onClick=onRegister, enabled=!busy&&policyAccepted, modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) { Text(if(busy) authConfig.submittingLabel else authConfig.registerButtonLabel) }
+                                if(!policyAccepted) Text(authConfig.policyRequiredMessage, color=Color(0xFFC62828), style=MaterialTheme.typography.bodySmall)
                         }
                     }
                     if(error!=null) Text(error,color=if(tab=="register" && error.contains("submitted",true)) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth())
