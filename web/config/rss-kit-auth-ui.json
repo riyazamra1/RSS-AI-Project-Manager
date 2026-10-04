@@ -13,5 +13,6 @@
   "policy_label": "I agree to the Terms of Service and Privacy Policy",
   "policy_required_message": "Please accept the Terms of Service and Privacy Policy to continue.",
   "submitting_label": "Submitting request…",
-  "signing_in_label": "Signing in…"
+  "signing_in_label": "Signing in…",
+  "primary_color_hex": "#3949AB"
 }
