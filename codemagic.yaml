@@ -24,6 +24,12 @@ workflows:
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
 
+      - name: Prepare Gradle wrapper
+        script: |
+          cd "$CM_BUILD_DIR/android"
+          chmod +x ./gradlew
+          ls -l ./gradlew
+
       - name: Verify Android project
         script: |
           cd "$CM_BUILD_DIR/android"
@@ -32,9 +38,7 @@ workflows:
       - name: Build debug APK
         script: |
           cd "$CM_BUILD_DIR/android"
-          ./gradlew --no-daemon assembleDebug \
-            -PversionCode="$BUILD_NUMBER" \
-            -PversionName="0.1.$BUILD_NUMBER"
+          ./gradlew --no-daemon assembleDebug             -PversionCode="$BUILD_NUMBER"             -PversionName="0.1.$BUILD_NUMBER"
 
       - name: Verify APK
         script: |
@@ -62,12 +66,7 @@ workflows:
           npm install --global wrangler
 
           echo "Uploading $APK_PATH to RSS R2: $RSS_R2_BUCKET/$OBJECT_KEY"
-          CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
-          CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID" \
-            wrangler r2 object put "$RSS_R2_BUCKET/$OBJECT_KEY" \
-              --file "$APK_PATH" \
-              --remote \
-              --content-type application/vnd.android.package-archive
+          CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN"           CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID"             wrangler r2 object put "$RSS_R2_BUCKET/$OBJECT_KEY"               --file "$APK_PATH"               --remote               --content-type application/vnd.android.package-archive
 
           echo "RSS R2 deployment completed."
           echo "Object: $RSS_R2_BUCKET/$OBJECT_KEY"
