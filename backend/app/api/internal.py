@@ -17,6 +17,11 @@ def _token_hash(token: str) -> str:
 def _require_core(request: Request) -> None:
     expected = settings.rss_core_service_token.strip()
     supplied = request.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
+    # RSS Core may deliver callbacks through an intermediary that does not
+    # preserve the Authorization header. Accept the dedicated integration
+    # header as a fallback while keeping the same shared secret.
+    if not supplied:
+        supplied = request.headers.get("X-RSS-Core-Service-Token", "").strip()
     if not expected or not supplied or not secrets.compare_digest(supplied, expected):
         raise HTTPException(401, "RSS Core service authorization required")
 
