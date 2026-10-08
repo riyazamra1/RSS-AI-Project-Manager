@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from ..core.config import settings
 from ..db import get_connection
 
-router = APIRouter(prefix="/internal", tags=["internal"])
+router = APIRouter(tags=["internal"])
 
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
@@ -45,8 +45,8 @@ async def _send_template(to: str, template_id: str, variables: dict[str, str]) -
 def _app_url(path: str = "") -> str:
     return settings.app_base_url.rstrip("/") + path
 
-@router.post("/approval")
-@router.post("/api/v1/approval")
+@router.post("/internal/approval")
+@router.post("/internal/api/v1/approval")
 async def receive_core_approval(request: Request):
     _require_core(request)
     body = await request.json()
