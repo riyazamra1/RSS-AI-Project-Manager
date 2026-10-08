@@ -13,7 +13,7 @@ from ..core.config import settings
 from ..db import get_connection
 from ..security import create_session, hash_password, require_auth, require_platform_admin, revoke_session, user_workspaces, verify_password
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"])\n\n\ndef _ensure_blocked_users_table(conn) -> None:\n    conn.execute("CREATE TABLE IF NOT EXISTS blocked_users (email TEXT PRIMARY KEY,user_id UUID,full_name TEXT,reason TEXT,previous_approval_status TEXT,blocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),blocked_by TEXT NOT NULL DEFAULT 'rss-core-admin')")\n
 
 
 class RegisterRequest(BaseModel):
@@ -159,6 +159,8 @@ def _find_or_create_social_user(provider: str, subject: str, email: str | None, 
             return identity["id"], identity["email"], identity["full_name"]
 
         if email:
+            if conn.execute("SELECT 1 FROM blocked_users WHERE lower(email)=lower(%s)", (email,)).fetchone():
+                raise HTTPException(403, "This email address is blocked by the RSS AI Project Manager administrator")
             user = conn.execute(
                 "SELECT id,email,full_name,approval_status FROM users WHERE lower(email)=lower(%s)",
                 (email,),
@@ -208,6 +210,9 @@ async def register(item: RegisterRequest):
         raise HTTPException(422, str(exc))
     request_id = str(uuid4())
     with get_connection() as conn:
+        _ensure_blocked_users_table(conn)
+        if conn.execute("SELECT 1 FROM blocked_users WHERE lower(email)=lower(%s)", (item.email,)).fetchone():
+            raise HTTPException(403, "This email address is blocked by the RSS AI Project Manager administrator")
         if conn.execute("SELECT 1 FROM users WHERE lower(email)=lower(%s)", (item.email,)).fetchone():
             raise HTTPException(409, "Account already exists")
         user = conn.execute(
@@ -270,6 +275,9 @@ async def verify_email(token: str):
 @router.post("/login")
 def login(item: LoginRequest):
     with get_connection() as conn:
+        _ensure_blocked_users_table(conn)
+        if conn.execute("SELECT 1 FROM blocked_users WHERE lower(email)=lower(%s)", (item.email,)).fetchone():
+            raise HTTPException(403, "This email address is blocked by the RSS AI Project Manager administrator")
         user = conn.execute(
             """SELECT id,email,full_name,email_verified,password_hash,approval_status
                FROM users WHERE lower(email)=lower(%s)""",
