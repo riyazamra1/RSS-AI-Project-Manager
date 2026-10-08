@@ -548,6 +548,8 @@ private fun Dashboard(
     projectDescription: String,
     onProjectDescription: (String) -> Unit
 ) {
+    var page by remember { mutableStateOf("Dashboard") }
+
     if (editingProject != null) {
         AlertDialog(
             onDismissRequest = onDismissEdit,
@@ -555,37 +557,13 @@ private fun Dashboard(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("ID: ${editingProject.id}")
-                    OutlinedTextField(
-                        projectName, onProjectName,
-                        label = { Text("Project name") },
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        projectRepo, onProjectRepo,
-                        label = { Text("GitHub repository") },
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        projectDescription, onProjectDescription,
-                        label = { Text("Description") },
-                        minLines = 3
-                    )
+                    OutlinedTextField(projectName, onProjectName, label = { Text("Project name") }, singleLine = true)
+                    OutlinedTextField(projectRepo, onProjectRepo, label = { Text("GitHub repository") }, singleLine = true)
+                    OutlinedTextField(projectDescription, onProjectDescription, label = { Text("Description") }, minLines = 3)
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        onUpdateProject(
-                            editingProject,
-                            projectName,
-                            projectRepo,
-                            projectDescription
-                        )
-                    },
-                    enabled = !busy && projectName.isNotBlank()
-                ) {
-                    Text("Save")
-                }
+                Button(onClick = { onUpdateProject(editingProject, projectName, projectRepo, projectDescription) }, enabled = !busy && projectName.isNotBlank()) { Text("Save") }
             },
             dismissButton = { TextButton(onClick = onDismissEdit) { Text("Cancel") } }
         )
@@ -604,125 +582,202 @@ private fun Dashboard(
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        onCreateProject(
-                            projectId,
-                            projectName,
-                            projectRepo,
-                            projectDescription
-                        )
-                    },
-                    enabled = !busy && projectId.isNotBlank() && projectName.isNotBlank()
-                ) {
-                    Text("Create")
-                }
+                Button(onClick = { onCreateProject(projectId, projectName, projectRepo, projectDescription) }, enabled = !busy && projectId.isNotBlank() && projectName.isNotBlank()) { Text("Create") }
             },
-            dismissButton = { TextButton(onClick = onDismissProjectForm) { Text("Cancel") } }        )
+            dismissButton = { TextButton(onClick = onDismissProjectForm) { Text("Cancel") } }
+        )
     }
 
-    LazyColumn(
-        Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        item {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AsyncImage(
-                        model = "https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png",
-                        contentDescription = "RSS AI Project Manager logo",
-                        modifier = Modifier.size(56.dp), contentScale = ContentScale.Fit
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text("RSS Projects", style = MaterialTheme.typography.headlineSmall)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onRefresh, enabled = !busy) { Text("Refresh") }
-                    OutlinedButton(onClick = onLogout, enabled = !busy) { Text("Logout") }
-                    Button(onClick = onShowProjectForm, enabled = !busy) { Text("New") }
-                }
-            }
-        }
-
-        items(projects) { project ->
-            ElevatedCard(
-                onClick = { onSelect(project) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(project.name, style = MaterialTheme.typography.titleMedium)
-                            Text(project.repository ?: "Repository not configured")
-                            Text("Status: ${project.status ?: "unknown"}")
-                        }
-                        TextButton(onClick = { onEditProject(project) }, enabled = !busy) {
-                            Text("Edit")
-                        }
+    Scaffold(
+        containerColor = Color(0xFFF7F8FF),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text("RSS AI Project Manager", fontWeight = FontWeight.Bold)
+                        Text(page, style = MaterialTheme.typography.labelMedium, color = Color(0xFF68738D))
                     }
-                    if (!project.description.isNullOrBlank()) {
-                        Text(
-                            project.description,
-                            style = MaterialTheme.typography.bodySmall
+                },
+                actions = {
+                    IconButton(onClick = onRefresh, enabled = !busy) { Text("↻", fontSize = MaterialTheme.typography.titleLarge.fontSize) }
+                    TextButton(onClick = onLogout, enabled = !busy) { Text("Logout") }
+                }
+            )
+        }
+    ) { padding ->
+        Row(Modifier.fillMaxSize().padding(padding)) {
+            NavigationRail(containerColor = Color(0xFF20265C)) {
+                listOf("Dashboard", "Projects", "Tasks").forEach { item ->
+                    NavigationRailItem(
+                        selected = page == item,
+                        onClick = { page = item },
+                        icon = { Text(if (item == "Dashboard") "⌂" else if (item == "Projects") "▦" else "✓", color = if (page == item) Color(0xFF20265C) else Color.White) },
+                        label = { Text(item, color = Color.White) },
+                        colors = NavigationRailItemDefaults.colors(
+                            selectedIconColor = Color(0xFF20265C),
+                            selectedTextColor = Color.White,
+                            indicatorColor = Color.White.copy(alpha = .96f)
                         )
+                    )
+                }
+            }
+
+            LazyColumn(
+                Modifier.fillMaxSize().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (page == "Dashboard") {
+                    item {
+                        Card(
+                            Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(22.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFF4B3CC4)
+                            )
+                        ) {
+                            Column(Modifier.padding(20.dp)) {
+                                Text("Welcome to your project control center", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.height(6.dp))
+                                Text("Manage projects, requirements, tasks and approved execution from one place.", color = Color.White.copy(alpha = .9f))
+                                Spacer(Modifier.height(14.dp))
+                                Button(onClick = onShowProjectForm, enabled = !busy, colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF4B3CC4))) {
+                                    Text("Create Project")
+                                }
+                            }
+                        }
                     }
+                    item {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            MetricCard("Projects", projects.size.toString(), Modifier.weight(1f))
+                            MetricCard("Tasks", tasks.size.toString(), Modifier.weight(1f))
+                            MetricCard("Active", tasks.count { it.status.lowercase() in listOf("running", "in_progress", "dispatched") }.toString(), Modifier.weight(1f))
+                        }
+                    }
+                    item {
+                        SectionCard("Projects") {
+                            if (projects.isEmpty()) {
+                                EmptyState("No projects yet", "Create your first RSS project to start managing requirements and tasks.", "Create Project", onShowProjectForm)
+                            } else {
+                                projects.take(5).forEach { project ->
+                                    ProjectRow(project, selected?.id == project.id, onSelect, onEditProject, busy)
+                                }
+                            }
+                        }
+                    }
+                    item {
+                        SectionCard("Execution") {
+                            Text("RSS Core → RAY is the approved execution path. Project Manager creates and tracks work; execution stays server-side.", color = Color(0xFF68738D))
+                            Spacer(Modifier.height(10.dp))
+                            Button(onClick = onGoAhead, enabled = !busy) { Text(if (busy) "Working…" else "Go Ahead") }
+                            if (!error.isNullOrBlank()) {
+                                Spacer(Modifier.height(10.dp))
+                                Text(error, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                } else if (page == "Projects") {
+                    item {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Projects", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                            Button(onClick = onShowProjectForm, enabled = !busy) { Text("New Project") }
+                        }
+                    }
+                    if (projects.isEmpty()) {
+                        item { EmptyState("No projects found", "Your workspace currently has no project records.", "Create Project", onShowProjectForm) }
+                    } else {
+                        items(projects) { project ->
+                            ProjectRow(project, selected?.id == project.id, onSelect, onEditProject, busy)
+                        }
+                    }
+                } else {
+                    item {
+                        Text("Tasks", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        if (selected != null) Text("Project: ${selected.name}", color = Color(0xFF68738D))
+                    }
+                    if (selected == null) {
+                        item { EmptyState("Select a project", "Choose a project from the Projects section to view and create tasks.", "View Projects") { page = "Projects" } }
+                    } else {
+                        item {
+                            SectionCard("Create Task") {
+                                OutlinedTextField(taskTitle, onTaskTitle, label = { Text("Task / next action") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedTextField(taskContext, onTaskContext, label = { Text("Context / requirements") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+                                Spacer(Modifier.height(8.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(onClick = onCreate, enabled = !busy && taskTitle.isNotBlank()) { Text("Create Task") }
+                                    OutlinedButton(onClick = onGoAhead, enabled = !busy) { Text("Go Ahead") }
+                                }
+                            }
+                        }
+                        if (tasks.isEmpty()) {
+                            item { EmptyState("No tasks yet", "Create a task for this project to begin tracking work.", "Focus task field") { } }
+                        } else {
+                            items(tasks) { task ->
+                                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                                    Column(Modifier.padding(16.dp)) {
+                                        Text(task.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                        Spacer(Modifier.height(5.dp))
+                                        Text("Status: ${task.status}", color = Color(0xFF68738D))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (!error.isNullOrBlank()) item { Text(error, color = MaterialTheme.colorScheme.error) }
                 }
-            }
-        }
-
-        if (selected != null) {
-            item {
-                HorizontalDivider()
-                Text("Selected: ${selected.name}", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(6.dp))
-                OutlinedTextField(
-                    taskTitle,
-                    onTaskTitle,
-                    label = { Text("Task / next action") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    taskContext,
-                    onTaskContext,
-                    label = { Text("Context / requirements") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = onCreate,
-                        enabled = !busy && taskTitle.isNotBlank()
-                    ) { Text("Create Task") }
-                    Button(
-                        onClick = onGoAhead,
-                        enabled = !busy
-                    ) { Text(if (busy) "Working..." else "Go Ahead") }
-                }
-                Spacer(Modifier.height(8.dp))
-                Text("Tasks", style = MaterialTheme.typography.titleMedium)
-            }
-
-            items(tasks) { task ->
-                ListItem(
-                    headlineContent = { Text(task.title) },
-                    supportingContent = { Text("Status: ${task.status}") }
-                )
-            }
-        }
-
-        if (error != null) {
-            item {
-                Text(
-                    error,
-                    color = MaterialTheme.colorScheme.error
-                )
             }
         }
     }
 }
+
+@Composable
+private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) {
+    Card(modifier, shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.padding(14.dp)) {
+            Text(label, color = Color(0xFF68738D), style = MaterialTheme.typography.labelMedium)
+            Text(value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color(0xFF20265C))
+        }
+    }
+}
+
+@Composable
+private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            content()
+        }
+    }
+}
+
+@Composable
+private fun EmptyState(title: String, message: String, action: String, onAction: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("◈", fontSize = MaterialTheme.typography.displaySmall.fontSize, color = Color(0xFF6A50E9))
+        Spacer(Modifier.height(8.dp))
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(message, color = Color(0xFF68738D), textAlign = TextAlign.Center)
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(onClick = onAction) { Text(action) }
+    }
+}
+
+@Composable
+private fun ProjectRow(project: Project, selected: Boolean, onSelect: (Project) -> Unit, onEdit: (Project) -> Unit, busy: Boolean) {
+    Card(
+        onClick = { onSelect(project) },
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = if (selected) Color(0xFFECE9FF) else Color.White)
+    ) {
+        Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(project.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(project.repository ?: "Repository not configured", color = Color(0xFF68738D), maxLines = 1)
+                Text("Status: ${project.status ?: "unknown"}", color = Color(0xFF68738D), style = MaterialTheme.typography.labelSmall)
+            }
+            TextButton(onClick = { onEdit(project) }, enabled = !busy) { Text("Edit") }
+        }
+    }
+}
+
