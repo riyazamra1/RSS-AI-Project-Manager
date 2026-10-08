@@ -11,7 +11,7 @@ workflows:
         - pattern: main
           include: true
           source: true
-      cancel_previous_builds: true
+      cancel_previous_builds: false
 
     environment:
       groups:
