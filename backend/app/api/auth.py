@@ -5,7 +5,7 @@ from urllib.parse import quote, urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 from uuid import UUID, uuid4
 
@@ -264,7 +264,7 @@ async def verify_email(token: str):
         conn.execute("UPDATE email_verifications SET verified_at=NOW() WHERE token_hash=%s", (token_hash,))
         conn.execute("UPDATE users SET email_verified=TRUE,email_verified_at=NOW(),updated_at=NOW() WHERE id=%s", (row["id"],))
         conn.commit()
-    return {"verified": True, "status": "pending_approval", "message": "Email verified. Your approval request has been sent to RSS Core."}
+    return HTMLResponse(content="""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Email verified · RSS AI Project Manager</title><style>body{margin:0;background:linear-gradient(135deg,#283593,#7E57C2,#00ACC1,#26A69A);font-family:Arial,Helvetica,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;color:#172033}.card{width:100%;max-width:520px;background:#fff;border-radius:24px;padding:38px 30px;text-align:center;box-sizing:border-box;box-shadow:0 20px 60px rgba(20,30,80,.28)}.logo{width:78px;height:78px;object-fit:contain;margin-bottom:20px}.badge{display:inline-block;padding:7px 12px;border-radius:999px;background:#E8F5E9;color:#2E7D32;font-size:13px;font-weight:700}h1{font-size:28px;line-height:36px;margin:16px 0 10px}p{font-size:15px;line-height:24px;color:#5b6475}.next{margin-top:24px;padding:16px;border-radius:14px;background:#F4F6FF;color:#3949AB;font-weight:700}.footer{margin-top:22px;font-size:12px;color:#8a93a3}</style></head><body><main class="card"><img class="logo" src="https://raw.githubusercontent.com/riyazamra1/RSS-AI-Project-Manager/main/web/assets/rss-ai-project-manager-logo.png" alt="RSS AI Project Manager"><span class="badge">✓ EMAIL VERIFIED</span><h1>Email verification complete</h1><p>Your email address has been verified successfully.</p><div class="next">Your account is now waiting for RSS Core administrator approval.</div><p>You can close this page. Once approved, you can sign in to RSS AI Project Manager.</p><div class="footer">Razeen Secure Solution · RSS AI Project Manager</div></main></body></html>""")
 
 
 @router.post("/login")
