@@ -100,6 +100,10 @@ async def receive_core_approval(request: Request):
                 conn.commit()
     return {"ok": True, "user_id": user_id, "request_id": request_id, "status": status}
 
+@router.post("/api/v1/internal/approval")
+async def receive_core_approval_v1_alias(request: Request):
+    return await receive_core_approval(request)
+
 @router.get("/health")
 def internal_health(request: Request):
     _require_core(request)
