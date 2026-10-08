@@ -104,6 +104,36 @@ async def receive_core_approval(request: Request):
 async def receive_core_approval_v1_alias(request: Request):
     return await receive_core_approval(request)
 
+@router.get("/internal/users")
+def list_internal_users(request: Request):
+    _require_core(request)
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT id,email,full_name,email_verified,approval_status,created_at,updated_at
+               FROM users ORDER BY created_at DESC"""
+        ).fetchall()
+    return {"users": [dict(row) for row in rows]}
+
+
+@router.delete("/internal/users/{user_id}")
+def delete_internal_user(user_id: str, request: Request):
+    _require_core(request)
+    with get_connection() as conn:
+        user = conn.execute(
+            "SELECT id,email,full_name FROM users WHERE id=%s FOR UPDATE",
+            (user_id,),
+        ).fetchone()
+        if not user:
+            raise HTTPException(404, "Project Manager user not found")
+        conn.execute(
+            "DELETE FROM workspaces WHERE owner_user_id=%s",
+            (user_id,),
+        )
+        conn.execute("DELETE FROM users WHERE id=%s", (user_id,))
+        conn.commit()
+    return {"ok": True, "user_id": user_id, "email": user["email"]}
+
+
 @router.get("/health")
 def internal_health(request: Request):
     _require_core(request)
