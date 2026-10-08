@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from ..core.config import settings
 from ..db import get_connection
 
-router = APIRouter(tags=["internal"])
+router = APIRouter(tags=["internal"])\n\n\ndef _ensure_blocked_users_table(conn) -> None:\n    conn.execute("""CREATE TABLE IF NOT EXISTS blocked_users (email TEXT PRIMARY KEY,user_id UUID,full_name TEXT,reason TEXT,previous_approval_status TEXT,blocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),blocked_by TEXT NOT NULL DEFAULT 'rss-core-admin')""")\n
 
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
@@ -132,6 +132,46 @@ def delete_internal_user(user_id: str, request: Request):
         conn.execute("DELETE FROM users WHERE id=%s", (user_id,))
         conn.commit()
     return {"ok": True, "user_id": user_id, "email": user["email"]}
+
+
+@router.get("/internal/blocked-users")
+def list_blocked_users(request: Request):
+    _require_core(request)
+    with get_connection() as conn:
+        _ensure_blocked_users_table(conn)
+        rows = conn.execute("SELECT email,user_id,full_name,reason,previous_approval_status,blocked_at,blocked_by FROM blocked_users ORDER BY blocked_at DESC").fetchall()
+        conn.commit()
+    return {"users": [dict(row) for row in rows]}
+
+
+@router.post("/internal/users/{user_id}/block")
+def block_internal_user(user_id: str, request: Request):
+    _require_core(request)
+    with get_connection() as conn:
+        _ensure_blocked_users_table(conn)
+        user = conn.execute("SELECT id,email,full_name,approval_status FROM users WHERE id=%s FOR UPDATE", (user_id,)).fetchone()
+        if not user:
+            raise HTTPException(404, "Project Manager user not found")
+        conn.execute("INSERT INTO blocked_users(email,user_id,full_name,reason,previous_approval_status,blocked_by) VALUES(%s,%s,%s,%s,%s,%s) ON CONFLICT(email) DO UPDATE SET user_id=EXCLUDED.user_id,full_name=EXCLUDED.full_name,reason=EXCLUDED.reason,previous_approval_status=EXCLUDED.previous_approval_status,blocked_at=NOW(),blocked_by=EXCLUDED.blocked_by", (user["email"], user["id"], user["full_name"], None, user["approval_status"], "rss-core-admin"))
+        conn.execute("UPDATE users SET approval_status='blocked',updated_at=NOW() WHERE id=%s", (user_id,))
+        conn.execute("UPDATE sessions SET revoked_at=NOW() WHERE user_id=%s AND revoked_at IS NULL", (user_id,))
+        conn.commit()
+    return {"ok": True, "user_id": user_id, "email": user["email"], "status": "blocked"}
+
+
+@router.delete("/internal/users/{user_id}/block")
+def unblock_internal_user(user_id: str, request: Request):
+    _require_core(request)
+    with get_connection() as conn:
+        _ensure_blocked_users_table(conn)
+        row = conn.execute("SELECT email,previous_approval_status FROM blocked_users WHERE user_id=%s FOR UPDATE", (user_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Blocked Project Manager user not found")
+        restored = row["previous_approval_status"] or "pending"
+        conn.execute("DELETE FROM blocked_users WHERE email=%s", (row["email"],))
+        conn.execute("UPDATE users SET approval_status=%s,updated_at=NOW() WHERE id=%s", (restored, user_id))
+        conn.commit()
+    return {"ok": True, "user_id": user_id, "email": row["email"], "status": restored}
 
 
 @router.get("/health")
