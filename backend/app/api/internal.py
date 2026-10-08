@@ -46,6 +46,7 @@ def _app_url(path: str = "") -> str:
     return settings.app_base_url.rstrip("/") + path
 
 @router.post("/approval")
+@router.post("/api/v1/approval")
 async def receive_core_approval(request: Request):
     _require_core(request)
     body = await request.json()
