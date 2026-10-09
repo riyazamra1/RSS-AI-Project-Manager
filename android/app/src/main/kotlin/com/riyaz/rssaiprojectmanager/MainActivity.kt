@@ -515,6 +515,7 @@ private fun AuthScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Dashboard(
     projects: List<Project>,
