@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
+import json
+from pathlib import Path
 from pydantic import BaseModel, Field
 
 from ..db import get_connection
@@ -75,6 +77,52 @@ def update_project(project_id: str, project: ProjectUpdate, ctx: dict = Depends(
         conn.commit()
     audit(ctx["user"],ctx["workspace_id"],"project.update","project",project_id)
     return dict(row)
+
+@router.post("/import-registry")
+def import_registry_projects(ctx: dict = Depends(require_workspace_role("manager"))) -> dict:
+    """Import RSS portfolio projects into the current workspace."""
+    workspace_id = str(ctx["workspace_id"])
+    registry_path = Path(__file__).resolve().parents[3] / "config" / "projects.json"
+    try:
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+        configured = registry.get("projects", [])
+    except (OSError, ValueError) as exc:
+        raise HTTPException(503, "RSS project registry is unavailable") from exc
+
+    imported = 0
+    skipped = 0
+    suffix = workspace_id.replace("-", "")[:10]
+    with get_connection() as conn:
+        for item in configured:
+            canonical_id = str(item.get("id", "")).strip()
+            name = str(item.get("name", "")).strip()
+            if not canonical_id or not name:
+                continue
+            repository = item.get("repository")
+            exists = conn.execute(
+                "SELECT id FROM projects WHERE workspace_id=%s AND repository IS NOT DISTINCT FROM %s",
+                (workspace_id, repository),
+            ).fetchone() if repository else None
+            if exists:
+                skipped += 1
+                continue
+            project_id = f"{canonical_id[:105]}-{suffix}"
+            row = conn.execute(
+                """INSERT INTO projects(id,name,repository,enabled,priority,description,workspace_id)
+                   VALUES(%s,%s,%s,%s,%s,%s,%s)
+                   ON CONFLICT(id) DO NOTHING
+                   RETURNING id""",
+                (project_id, name, repository, bool(item.get("enabled", True)),
+                 int(item.get("priority", 100)), item.get("description"), workspace_id),
+            ).fetchone()
+            if row:
+                imported += 1
+            else:
+                skipped += 1
+        conn.commit()
+    audit(ctx["user"], workspace_id, "project.registry_import", "workspace", workspace_id,
+          {"imported": imported, "skipped": skipped})
+    return {"imported": imported, "skipped": skipped, "workspace_id": workspace_id}
 
 @router.post("/sync")
 def sync_projects(_: bool = Depends(require_worker)) -> dict:
