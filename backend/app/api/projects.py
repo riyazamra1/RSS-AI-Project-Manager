@@ -24,13 +24,59 @@ class ProjectUpdate(BaseModel):
     priority: int = 100
     description: str | None = Field(default=None, max_length=5000)
 
+def _import_registry_into_workspace(workspace_id: str) -> dict:
+    """Idempotently populate an empty workspace with the configured RSS portfolio."""
+    registry_path = Path(__file__).resolve().parents[3] / "config" / "projects.json"
+    try:
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+        configured = registry.get("projects", [])
+    except (OSError, ValueError) as exc:
+        raise HTTPException(503, "RSS project registry is unavailable") from exc
+    imported = 0
+    skipped = 0
+    suffix = workspace_id.replace("-", "")[:10]
+    with get_connection() as conn:
+        existing = conn.execute("SELECT repository FROM projects WHERE workspace_id=%s AND repository IS NOT NULL", (workspace_id,)).fetchall()
+        existing_repositories = {str(row["repository"]).lower() for row in existing if row["repository"]}
+        for item in configured:
+            canonical_id = str(item.get("id", "")).strip()
+            name = str(item.get("name", "")).strip()
+            if not canonical_id or not name:
+                continue
+            repository = item.get("repository")
+            if repository and str(repository).lower() in existing_repositories:
+                skipped += 1
+                continue
+            project_id = f"{canonical_id[:105]}-{suffix}"
+            row = conn.execute(
+                """INSERT INTO projects(id,name,repository,enabled,priority,description,workspace_id)
+                   VALUES(%s,%s,%s,%s,%s,%s,%s)
+                   ON CONFLICT(id) DO NOTHING RETURNING id""",
+                (project_id, name, repository, bool(item.get("enabled", True)),
+                 int(item.get("priority", 100)), item.get("description"), workspace_id),
+            ).fetchone()
+            if row:
+                imported += 1
+                if repository:
+                    existing_repositories.add(str(repository).lower())
+            else:
+                skipped += 1
+        conn.commit()
+    return {"imported": imported, "skipped": skipped, "workspace_id": workspace_id}
+
 @router.get("")
 def list_projects(ctx: dict = Depends(current_workspace)) -> list[dict]:
+    workspace_id = str(ctx["workspace_id"])
+    with get_connection() as conn:
+        count = conn.execute("SELECT COUNT(*) AS total FROM projects WHERE workspace_id=%s", (workspace_id,)).fetchone()
+    # Existing accounts should see the RSS portfolio automatically; do not require a separate create/import action.
+    if not count or int(count["total"]) == 0:
+        _import_registry_into_workspace(workspace_id)
     with get_connection() as conn:
         rows = conn.execute(
             """SELECT id,name,repository,enabled,priority,description,status,start_date,due_date,archived,created_at,updated_at
                FROM projects WHERE workspace_id=%s ORDER BY priority,name""",
-            (ctx["workspace_id"],),
+            (workspace_id,),
         ).fetchall()
     return list(rows)
 
@@ -80,49 +126,10 @@ def update_project(project_id: str, project: ProjectUpdate, ctx: dict = Depends(
 
 @router.post("/import-registry")
 def import_registry_projects(ctx: dict = Depends(require_workspace_role("manager"))) -> dict:
-    """Import RSS portfolio projects into the current workspace."""
-    workspace_id = str(ctx["workspace_id"])
-    registry_path = Path(__file__).resolve().parents[3] / "config" / "projects.json"
-    try:
-        registry = json.loads(registry_path.read_text(encoding="utf-8"))
-        configured = registry.get("projects", [])
-    except (OSError, ValueError) as exc:
-        raise HTTPException(503, "RSS project registry is unavailable") from exc
-
-    imported = 0
-    skipped = 0
-    suffix = workspace_id.replace("-", "")[:10]
-    with get_connection() as conn:
-        for item in configured:
-            canonical_id = str(item.get("id", "")).strip()
-            name = str(item.get("name", "")).strip()
-            if not canonical_id or not name:
-                continue
-            repository = item.get("repository")
-            exists = conn.execute(
-                "SELECT id FROM projects WHERE workspace_id=%s AND repository IS NOT DISTINCT FROM %s",
-                (workspace_id, repository),
-            ).fetchone() if repository else None
-            if exists:
-                skipped += 1
-                continue
-            project_id = f"{canonical_id[:105]}-{suffix}"
-            row = conn.execute(
-                """INSERT INTO projects(id,name,repository,enabled,priority,description,workspace_id)
-                   VALUES(%s,%s,%s,%s,%s,%s,%s)
-                   ON CONFLICT(id) DO NOTHING
-                   RETURNING id""",
-                (project_id, name, repository, bool(item.get("enabled", True)),
-                 int(item.get("priority", 100)), item.get("description"), workspace_id),
-            ).fetchone()
-            if row:
-                imported += 1
-            else:
-                skipped += 1
-        conn.commit()
-    audit(ctx["user"], workspace_id, "project.registry_import", "workspace", workspace_id,
-          {"imported": imported, "skipped": skipped})
-    return {"imported": imported, "skipped": skipped, "workspace_id": workspace_id}
+    """Manually re-import registry projects that are missing from the current workspace."""
+    result = _import_registry_into_workspace(str(ctx["workspace_id"]))
+    audit(ctx["user"], ctx["workspace_id"], "project.registry_import", "workspace", str(ctx["workspace_id"]), result)
+    return result
 
 @router.post("/sync")
 def sync_projects(_: bool = Depends(require_worker)) -> dict:
