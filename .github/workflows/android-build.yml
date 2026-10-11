@@ -13,6 +13,9 @@ on:
       - ".github/workflows/android-build.yml"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -29,12 +32,29 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+      # Keep one debug signing key between builds so Android accepts in-app updates.
+      - name: Restore persistent APK signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: rss-pm-debug-signing-key-v1
       - name: Build debug APK
         working-directory: android
-        run: gradle --no-daemon assembleDebug
+        run: gradle --no-daemon -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }} assembleDebug
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: rss-ai-project-manager-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+      - name: Publish update release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v${{ github.run_number }}
+          name: RSS AI Project Manager 1.0.${{ github.run_number }}
+          body: |
+            RSS AI Project Manager Android update.
+            Install this release from the app's Updates prompt.
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          make_latest: true

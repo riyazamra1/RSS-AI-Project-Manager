@@ -2,6 +2,13 @@ package com.riyaz.rssaiprojectmanager
 
 import android.os.Bundle
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Environment
+import android.provider.Settings
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileOutputStream
 import androidx.activity.ComponentActivity
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
@@ -129,6 +136,90 @@ data class Project(
 
 data class Task(val id: String, val title: String, val status: String)
 
+private data class AppUpdate(
+    val versionCode: Long,
+    val versionName: String,
+    val apkUrl: String,
+    val releaseNotes: String
+)
+
+private object AppUpdater {
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+        .callTimeout(90, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+
+    fun checkForUpdate(currentVersionCode: Long): AppUpdate? {
+        val request = Request.Builder()
+            .url("https://api.github.com/repos/riyazamra1/RSS-AI-Project-Manager/releases/latest")
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "RSS-AI-Project-Manager-Updater")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("Update check failed (HTTP ${response.code}).")
+            val release = JSONObject(response.body?.string().orEmpty())
+            val tag = release.optString("tag_name")
+            val version = tag.substringAfterLast('v').toLongOrNull()
+                ?: release.optLong("version_code", 0L)
+            if (version <= currentVersionCode) return null
+            val assets = release.optJSONArray("assets") ?: JSONArray()
+            var apkUrl: String? = null
+            for (i in 0 until assets.length()) {
+                val asset = assets.optJSONObject(i) ?: continue
+                if (asset.optString("name") == "app-debug.apk") {
+                    apkUrl = asset.optString("browser_download_url")
+                    break
+                }
+            }
+            val url = apkUrl ?: error("The latest release has no installable APK yet.")
+            return AppUpdate(
+                versionCode = version,
+                versionName = release.optString("name").ifBlank { tag },
+                apkUrl = url,
+                releaseNotes = release.optString("body").take(1200)
+            )
+        }
+    }
+
+    fun downloadAndInstall(context: Context, url: String) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+            !context.packageManager.canRequestPackageInstalls()
+        ) {
+            val settingsIntent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:${context.packageName}")
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(settingsIntent)
+            error("Allow RSS AI Project Manager to install updates, return to the app, then tap Download & install again.")
+        }
+        val host = Uri.parse(url).host.orEmpty()
+        if (!(host == "github.com" || host.endsWith(".githubusercontent.com"))) {
+            error("The update download URL is not trusted.")
+        }
+        val folder = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+        if (!folder.exists() && !folder.mkdirs()) error("Could not create the update download folder.")
+        val apk = File(folder, "rss-ai-project-manager-update.apk")
+        val request = Request.Builder().url(url).header("User-Agent", "RSS-AI-Project-Manager-Updater").build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("APK download failed (HTTP ${response.code}).")
+            val body = response.body ?: error("The APK download was empty.")
+            body.byteStream().use { input ->
+                FileOutputStream(apk).use { output -> input.copyTo(output) }
+            }
+        }
+        if (!apk.isFile || apk.length() < 1_000_000L) {
+            apk.delete()
+            error("The downloaded APK is incomplete. Please try again.")
+        }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apk)
+        val installIntent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(installIntent)
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -163,6 +254,10 @@ private fun ProjectManagerApp() {
     var error by remember { mutableStateOf<String?>(null) }
     var success by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var availableUpdate by remember { mutableStateOf<AppUpdate?>(null) }
+    var updateMessage by remember { mutableStateOf<String?>(null) }
+    var checkingUpdates by remember { mutableStateOf(false) }
+    var installingUpdate by remember { mutableStateOf(false) }
 
     val api = remember(baseUrl) { ProjectManagerApi(baseUrl).also { it.token = securePrefs.getString("token", null); it.workspaceId = workspaceId } }
     val scope = rememberCoroutineScope()
@@ -180,6 +275,32 @@ private fun ProjectManagerApp() {
     var projectName by remember { mutableStateOf("") }
     var projectRepo by remember { mutableStateOf("") }
     var projectDescription by remember { mutableStateOf("") }
+
+    fun checkForUpdates(showResultWhenCurrent: Boolean = false) {
+        if (checkingUpdates) return
+        checkingUpdates = true
+        scope.launch(Dispatchers.IO) {
+            try {
+                val installedCode = context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode
+                val update = AppUpdater.checkForUpdate(installedCode)
+                if (update != null) {
+                    availableUpdate = update
+                    updateMessage = null
+                } else if (showResultWhenCurrent) {
+                    availableUpdate = null
+                    updateMessage = "You're using the latest version."
+                } else {
+                    availableUpdate = null
+                }
+            } catch (e: Exception) {
+                if (showResultWhenCurrent) {
+                    updateMessage = e.message ?: "Could not check for updates. Please try again."
+                }
+            } finally {
+                checkingUpdates = false
+            }
+        }
+    }
 
     fun loadProjects() {
         scope.launch(Dispatchers.IO) {
@@ -229,6 +350,9 @@ private fun ProjectManagerApp() {
 
     LaunchedEffect(signedIn) {
         if (signedIn) loadProjects()
+    }
+    LaunchedEffect(Unit) {
+        checkForUpdates(showResultWhenCurrent = false)
     }
 
     MaterialTheme {
@@ -358,6 +482,7 @@ private fun ProjectManagerApp() {
                         loadProjects()
                         selected?.let { loadTasks(it) }
                     },
+                    onCheckUpdates = { checkForUpdates(showResultWhenCurrent = true) },
                     busy = busy,                    error = error,
                     onCreateProject = { id, name, repo, description ->
                         busy = true
@@ -413,6 +538,56 @@ private fun ProjectManagerApp() {
                     onProjectRepo = { projectRepo = it },
                     projectDescription = projectDescription,
                     onProjectDescription = { projectDescription = it }
+                )
+            }
+            if (availableUpdate != null || updateMessage != null) {
+                val update = availableUpdate
+                AlertDialog(
+                    onDismissRequest = { availableUpdate = null; updateMessage = null },
+                    icon = { Text("⬆", color = Color(0xFF4B3CC4), style = MaterialTheme.typography.headlineMedium) },
+                    title = { Text(if (update != null) "RSS AI Project Manager update" else "App updates") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (update != null) {
+                                Text("Version ${update.versionName} is available.")
+                                if (update.releaseNotes.isNotBlank()) Text(update.releaseNotes)
+                            } else {
+                                Text(updateMessage.orEmpty())
+                            }
+                            if (updateMessage != null && update != null) {
+                                Text(updateMessage.orEmpty(), color = MaterialTheme.colorScheme.error)
+                            }
+                            if (checkingUpdates) CircularProgressIndicator()
+                        }
+                    },
+                    confirmButton = {
+                        if (update != null) {
+                            Button(
+                                enabled = !installingUpdate,
+                                onClick = {
+                                    installingUpdate = true
+                                    updateMessage = null
+                                    scope.launch(Dispatchers.IO) {
+                                        try {
+                                            AppUpdater.downloadAndInstall(context, update.apkUrl)
+                                            updateMessage = "Opening Android's installer…"
+                                        } catch (e: Exception) {
+                                            updateMessage = e.message ?: "Could not install the update."
+                                        } finally {
+                                            installingUpdate = false
+                                        }
+                                    }
+                                }
+                            ) { Text(if (installingUpdate) "Preparing update…" else "Download & install") }
+                        } else {
+                            TextButton(onClick = { updateMessage = null }) { Text("Close") }
+                        }
+                    },
+                    dismissButton = {
+                        if (update != null) {
+                            TextButton(onClick = { availableUpdate = null; updateMessage = null }) { Text("Later") }
+                        }
+                    }
                 )
             }
         }
@@ -517,6 +692,7 @@ private fun AuthScreen(
                 }
                 Spacer(Modifier.height(20.dp))
             }
+
         }
     }
 }
@@ -536,6 +712,7 @@ private fun Dashboard(
     onGoAhead: () -> Unit,
     onLogout: () -> Unit,
     onRefresh: () -> Unit,
+    onCheckUpdates: () -> Unit,
     busy: Boolean,
     error: String?,
     onCreateProject: (String, String, String, String) -> Unit,
@@ -606,6 +783,7 @@ private fun Dashboard(
                     }
                 },
                 actions = {
+                    TextButton(onClick = onCheckUpdates, enabled = !checkingUpdates) { Text(if (checkingUpdates) "Checking…" else "Updates") }
                     IconButton(onClick = onRefresh, enabled = !busy) { Text("↻", fontSize = MaterialTheme.typography.titleLarge.fontSize) }
                     TextButton(onClick = onLogout, enabled = !busy) { Text("Logout") }
                 }
