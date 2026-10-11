@@ -56,21 +56,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private class ProjectManagerApi(private val baseUrl: String) {
-    init {
-        val endpoint = Uri.parse(baseUrl.trim())
-        require(endpoint.scheme == "https" && !endpoint.host.isNullOrBlank() && endpoint.userInfo == null) {
-            "For security, the API URL must be a valid HTTPS address."
-        }
-    }
-
     private val client = OkHttpClient.Builder().connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS).readTimeout(30, java.util.concurrent.TimeUnit.SECONDS).writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS).callTimeout(45, java.util.concurrent.TimeUnit.SECONDS).build()
     var token: String? = null
     var workspaceId: String? = null
 
     private fun request(path: String, method: String, body: String? = null): String {
         val target = Uri.parse(baseUrl.trimEnd('/') + path)
-        require(target.scheme == "https" && target.host == Uri.parse(baseUrl).host && target.userInfo == null) {
-            "Blocked an insecure or unexpected API destination."
+        require(target.scheme == "https" && !target.host.isNullOrBlank() && target.host == Uri.parse(baseUrl).host && target.userInfo == null) {
+            "For security, enter a valid HTTPS API URL. Insecure destinations are blocked."
         }
         val builder = Request.Builder()
             .url(target.toString())
@@ -391,12 +384,13 @@ private fun ProjectManagerApp() {
     MaterialTheme {
         Surface(Modifier.fillMaxSize()) {
             if (!introSeen) {
-                IntroFlowScreen(onFinish = {
+                IntroFlowScreen(themeChoice = themeChoice, onFinish = {
                     introSeen = true
                     securePrefs.edit().putBoolean("intro_seen", true).apply()
                 })
             } else if (!signedIn) {
                 AuthScreen(
+                    themeChoice = themeChoice,
                     tab = authTab,
                     onTab = { authTab = it; error = null; success = null },
                     baseUrl = baseUrl, onBaseUrl = { baseUrl = it },
@@ -640,22 +634,25 @@ private fun ProjectManagerApp() {
 }
 
 @Composable
-private fun AnimatedRoyalBackground(content: @Composable BoxScope.() -> Unit) {
+private fun AnimatedRoyalBackground(themeChoice: String = "Royal", content: @Composable BoxScope.() -> Unit) {
     val transition = rememberInfiniteTransition(label = "rssRoyal")
     val shift by transition.animateFloat(-900f, 1800f, infiniteRepeatable(tween(9000, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "shift")
-    val gradient = Brush.linearGradient(
-        listOf(Color(0xFF283593), Color(0xFF7E57C2), Color(0xFF00ACC1), Color(0xFF26A69A), Color(0xFFE0F7FA)),
-        Offset(0f, shift), Offset(1200f, shift + 1200f)
-    )
+    val palette = when (themeChoice) {
+        "Ocean" -> listOf(Color(0xFF003B73), Color(0xFF0077B6), Color(0xFF48CAE4), Color(0xFF90E0EF), Color(0xFFCAF0F8))
+        "Emerald" -> listOf(Color(0xFF064E3B), Color(0xFF059669), Color(0xFF34D399), Color(0xFFA7F3D0), Color(0xFFECFDF5))
+        "Violet" -> listOf(Color(0xFF4C1D95), Color(0xFF7C3AED), Color(0xFFA78BFA), Color(0xFFDDD6FE), Color(0xFFF5F3FF))
+        else -> listOf(Color(0xFF283593), Color(0xFF7E57C2), Color(0xFF00ACC1), Color(0xFF26A69A), Color(0xFFE0F7FA))
+    }
+    val gradient = Brush.linearGradient(palette, Offset(0f, shift), Offset(1200f, shift + 1200f))
     Box(Modifier.fillMaxSize().background(gradient), content = content)
 }
 
 @Composable
-private fun IntroFlowScreen(onFinish: () -> Unit) {
+private fun IntroFlowScreen(themeChoice: String, onFinish: () -> Unit) {
     var page by remember { mutableStateOf(0) }
     val titles = listOf("Manage Every RSS Project", "Turn Requirements Into Tasks", "Let AI Execute", "Track Progress Clearly")
     val bodies = listOf("One command center for your RSS project portfolio.", "Capture requirements, priorities and next actions in one place.", "Connect RSS Core and automation so approved work can move forward.", "Monitor projects, tasks and execution status from your dashboard.")
-    AnimatedRoyalBackground {
+    AnimatedRoyalBackground(themeChoice) {
         Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Image(painter = painterResource(R.drawable.rss_ai_project_manager_logo), contentDescription = "RSS AI Project Manager logo", modifier = Modifier.size(190.dp), contentScale = ContentScale.Fit)
             Spacer(Modifier.height(28.dp))
@@ -674,6 +671,7 @@ private fun IntroFlowScreen(onFinish: () -> Unit) {
 
 @Composable
 private fun AuthScreen(
+    themeChoice: String,
     tab: String, onTab: (String) -> Unit,
     baseUrl: String, onBaseUrl: (String) -> Unit,
     loginEmail: String, onLoginEmail: (String) -> Unit,
@@ -686,7 +684,7 @@ private fun AuthScreen(
     error: String?, success: String?, busy: Boolean, onLogin: () -> Unit, onRegister: () -> Unit
 ) {
     var policyAccepted by remember { mutableStateOf(false) }
-    AnimatedRoyalBackground {
+    AnimatedRoyalBackground(themeChoice) {
         Box(Modifier.fillMaxSize().imePadding().navigationBarsPadding()) {
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 20.dp),
@@ -784,6 +782,12 @@ private fun Dashboard(
     onProjectDescription: (String) -> Unit
 ) {
     var page by remember { mutableStateOf("Dashboard") }
+    val themeAccent = when (themeChoice) {
+        "Ocean" -> Color(0xFF0077B6)
+        "Emerald" -> Color(0xFF059669)
+        "Violet" -> Color(0xFF7C3AED)
+        else -> Color(0xFF4B3CC4)
+    }
 
     if (editingProject != null) {
         AlertDialog(
@@ -824,7 +828,7 @@ private fun Dashboard(
     }
 
     Scaffold(
-        containerColor = Color(0xFFF7F8FF),
+        containerColor = when (themeChoice) { "Ocean" -> Color(0xFFF1FAFF); "Emerald" -> Color(0xFFF1FCF6); "Violet" -> Color(0xFFF8F5FF); else -> Color(0xFFF7F8FF) },
         topBar = {
             TopAppBar(
                 title = {
@@ -842,7 +846,7 @@ private fun Dashboard(
         }
     ) { padding ->
         Row(Modifier.fillMaxSize().padding(padding)) {
-            NavigationRail(containerColor = Color(0xFF20265C)) {
+            NavigationRail(containerColor = themeAccent.copy(alpha = .96f)) {
                 listOf("Dashboard", "Projects", "Tasks", "Settings", "Premium").forEach { item ->
                     NavigationRailItem(
                         selected = page == item,
