@@ -29,10 +29,12 @@ def _github_repositories(owner: str) -> list[dict]:
     repos: list[dict] = []
     page = 1
     while True:
-        req = Request(
-            f"https://api.github.com/user/repos?per_page=100&page={page}&affiliation=owner,collaborator,organization_member&sort=full_name",
-            headers=headers,
-        )
+        if token:
+            url = f"https://api.github.com/user/repos?per_page=100&page={page}&affiliation=owner,collaborator,organization_member&sort=full_name"
+        else:
+            # Public repository discovery also works without a GitHub token.
+            url = f"https://api.github.com/users/{owner}/repos?per_page=100&page={page}&type=owner&sort=full_name"
+        req = Request(url, headers=headers)
         with urlopen(req, timeout=20) as response:
             batch = json.loads(response.read().decode("utf-8"))
         if not isinstance(batch, list):
@@ -53,31 +55,33 @@ def _matches(name: str, patterns: list[str]) -> bool:
 
 
 def _sync_projects(projects: list[dict]) -> int:
-    """Synchronize discovered projects into PostgreSQL."""
+    """Persist every discovered RSS repository into each active workspace."""
     synced = 0
     with get_connection() as conn:
-        for project in projects:
-            conn.execute(
-                """
-                INSERT INTO projects
-                    (id, name, repository, enabled, priority)
-                VALUES
-                    (%s, %s, %s, %s, %s)
-                ON CONFLICT (id) DO UPDATE SET
-                    name = EXCLUDED.name,
-                    repository = EXCLUDED.repository,
-                    enabled = EXCLUDED.enabled,
-                    priority = EXCLUDED.priority,
-                    updated_at = NOW()
-                """,
-                (
-                    project["id"], project["name"], project["repository"],
-                    project.get("enabled", True), int(project.get("priority", 999999)),
-                ),
-            )
-            synced += 1
+        workspaces = conn.execute("SELECT id FROM workspaces WHERE status='active' ORDER BY created_at").fetchall()
+        for workspace in workspaces:
+            workspace_id = str(workspace["id"])
+            suffix = workspace_id.replace("-", "")[:10]
+            for project in projects:
+                canonical_id = str(project["id"])
+                project_id = f"{canonical_id[:105]}-{suffix}"
+                conn.execute(
+                    """INSERT INTO projects
+                        (id,name,repository,enabled,priority,workspace_id,description)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (id) DO UPDATE SET
+                        name=EXCLUDED.name, repository=EXCLUDED.repository,
+                        enabled=EXCLUDED.enabled, priority=EXCLUDED.priority,
+                        description=COALESCE(EXCLUDED.description,projects.description),
+                        updated_at=NOW()
+                    WHERE projects.workspace_id=EXCLUDED.workspace_id""",
+                    (project_id, project["name"], project.get("repository"),
+                     project.get("enabled", True), int(project.get("priority", 999999)),
+                     workspace_id, project.get("description")),
+                )
+                synced += 1
+        conn.commit()
     return synced
-
 
 def discover_projects() -> dict:
     registry = _load_registry()

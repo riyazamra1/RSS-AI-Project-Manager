@@ -13,7 +13,12 @@ from ..core.config import settings
 from ..db import get_connection
 from ..security import create_session, hash_password, require_auth, require_platform_admin, revoke_session, user_workspaces, verify_password
 
-router = APIRouter(prefix="/auth", tags=["auth"])\n\n\ndef _ensure_blocked_users_table(conn) -> None:\n    conn.execute("CREATE TABLE IF NOT EXISTS blocked_users (email TEXT PRIMARY KEY,user_id UUID,full_name TEXT,reason TEXT,previous_approval_status TEXT,blocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),blocked_by TEXT NOT NULL DEFAULT 'rss-core-admin')")\n
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _ensure_blocked_users_table(conn) -> None:
+    conn.execute("CREATE TABLE IF NOT EXISTS blocked_users (email TEXT PRIMARY KEY,user_id UUID,full_name TEXT,reason TEXT,previous_approval_status TEXT,blocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),blocked_by TEXT NOT NULL DEFAULT 'rss-core-admin')")
+
 
 
 class RegisterRequest(BaseModel):

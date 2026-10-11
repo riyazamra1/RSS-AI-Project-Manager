@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
 COPY backend /app/backend
 COPY database /app/database
+COPY config /app/config
 COPY scripts /app/scripts
 COPY web /app/web
 

@@ -79,6 +79,8 @@ private class ProjectManagerApi(private val baseUrl: String) {
 
     fun projects(): JSONArray = JSONArray(request("/api/v1/projects", "GET"))
 
+    fun importRegistryProjects(): JSONObject = JSONObject(request("/api/v1/projects/import-registry", "POST", "{}"))
+
     fun updateProject(id: String, name: String, repository: String?, description: String): JSONObject {
         val body = JSONObject()
             .put("name", name)
@@ -182,7 +184,11 @@ private fun ProjectManagerApp() {
     fun loadProjects() {
         scope.launch(Dispatchers.IO) {
             try {
-                val json = api.projects()
+                var json = api.projects()
+                if (json.length() == 0) {
+                    api.importRegistryProjects()
+                    json = api.projects()
+                }
                 projects = (0 until json.length()).map { i ->
                     json.getJSONObject(i).let {
                         Project(
