@@ -2,6 +2,13 @@ package com.riyaz.rssaiprojectmanager
 
 import android.os.Bundle
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Environment
+import android.provider.Settings
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileOutputStream
 import androidx.activity.ComponentActivity
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
@@ -54,8 +61,12 @@ private class ProjectManagerApi(private val baseUrl: String) {
     var workspaceId: String? = null
 
     private fun request(path: String, method: String, body: String? = null): String {
+        val target = Uri.parse(baseUrl.trimEnd('/') + path)
+        require(target.scheme == "https" && !target.host.isNullOrBlank() && target.host == Uri.parse(baseUrl).host && target.userInfo == null) {
+            "For security, enter a valid HTTPS API URL. Insecure destinations are blocked."
+        }
         val builder = Request.Builder()
-            .url(baseUrl.trimEnd('/') + path)
+            .url(target.toString())
             .addHeader("Accept", "application/json")
         token?.let { builder.addHeader("Authorization", "Bearer $it") }
         workspaceId?.let { builder.addHeader("X-Workspace-ID", it) }
@@ -129,6 +140,105 @@ data class Project(
 
 data class Task(val id: String, val title: String, val status: String)
 
+private data class AppUpdate(
+    val versionCode: Long,
+    val versionName: String,
+    val apkUrl: String,
+    val sha256: String?,
+    val releaseNotes: String
+)
+
+private object AppUpdater {
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+        .callTimeout(90, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+
+    fun checkForUpdate(currentVersionCode: Long): AppUpdate? {
+        val request = Request.Builder()
+            .url("https://api.github.com/repos/riyazamra1/RSS-AI-Project-Manager/releases/latest")
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "RSS-AI-Project-Manager-Updater")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("Update check failed (HTTP ${response.code}).")
+            val release = JSONObject(response.body?.string().orEmpty())
+            val tag = release.optString("tag_name")
+            val version = tag.substringAfterLast('v').toLongOrNull()
+                ?: release.optLong("version_code", 0L)
+            if (version <= currentVersionCode) return null
+            val assets = release.optJSONArray("assets") ?: JSONArray()
+            var apkUrl: String? = null
+            var apkDigest: String? = null
+            for (i in 0 until assets.length()) {
+                val asset = assets.optJSONObject(i) ?: continue
+                if (asset.optString("name") == "app-debug.apk") {
+                    apkUrl = asset.optString("browser_download_url")
+                    apkDigest = asset.optString("digest").removePrefix("sha256:").takeIf { it.matches(Regex("(?i)[0-9a-f]{64}")) }
+                    break
+                }
+            }
+            val url = apkUrl ?: error("The latest release has no installable APK yet.")
+            if (Uri.parse(url).scheme != "https" || Uri.parse(url).host != "github.com") {
+                error("The release contains an untrusted APK download URL.")
+            }
+            return AppUpdate(
+                versionCode = version,
+                versionName = release.optString("name").ifBlank { tag },
+                apkUrl = url,
+                sha256 = apkDigest,
+                releaseNotes = release.optString("body").take(1200)
+            )
+        }
+    }
+
+    fun downloadAndInstall(context: Context, url: String, expectedSha256: String?) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+            !context.packageManager.canRequestPackageInstalls()
+        ) {
+            val settingsIntent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:${context.packageName}")
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(settingsIntent)
+            error("Allow RSS AI Project Manager to install updates, return to the app, then tap Download & install again.")
+        }
+        val host = Uri.parse(url).host.orEmpty()
+        if (!(host == "github.com" || host.endsWith(".githubusercontent.com"))) {
+            error("The update download URL is not trusted.")
+        }
+        val folder = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+        if (!folder.exists() && !folder.mkdirs()) error("Could not create the update download folder.")
+        val apk = File(folder, "rss-ai-project-manager-update.apk")
+        val request = Request.Builder().url(url).header("User-Agent", "RSS-AI-Project-Manager-Updater").build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("APK download failed (HTTP ${response.code}).")
+            val body = response.body ?: error("The APK download was empty.")
+            body.byteStream().use { input ->
+                FileOutputStream(apk).use { output -> input.copyTo(output) }
+            }
+        }
+        if (!apk.isFile || apk.length() < 1_000_000L) {
+            apk.delete()
+            error("The downloaded APK is incomplete. Please try again.")
+        }
+        if (!expectedSha256.isNullOrBlank()) {
+            val actual = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(apk.readBytes()).joinToString("") { "%02x".format(it) }
+            if (!actual.equals(expectedSha256, ignoreCase = true)) {
+                apk.delete()
+                error("APK integrity verification failed. The update was rejected.")
+            }
+        }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apk)
+        val installIntent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(installIntent)
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -163,6 +273,12 @@ private fun ProjectManagerApp() {
     var error by remember { mutableStateOf<String?>(null) }
     var success by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var availableUpdate by remember { mutableStateOf<AppUpdate?>(null) }
+    var updateMessage by remember { mutableStateOf<String?>(null) }
+    var checkingUpdates by remember { mutableStateOf(false) }
+    var installingUpdate by remember { mutableStateOf(false) }
+    var autoUpdateEnabled by remember { mutableStateOf(securePrefs.getBoolean("auto_update_enabled", true)) }
+    var themeChoice by remember { mutableStateOf(securePrefs.getString("theme_choice", "Royal") ?: "Royal") }
 
     val api = remember(baseUrl) { ProjectManagerApi(baseUrl).also { it.token = securePrefs.getString("token", null); it.workspaceId = workspaceId } }
     val scope = rememberCoroutineScope()
@@ -180,6 +296,34 @@ private fun ProjectManagerApp() {
     var projectName by remember { mutableStateOf("") }
     var projectRepo by remember { mutableStateOf("") }
     var projectDescription by remember { mutableStateOf("") }
+
+    fun checkForUpdates(showResultWhenCurrent: Boolean = false) {
+        if (checkingUpdates) return
+        checkingUpdates = true
+        scope.launch(Dispatchers.IO) {
+            try {
+                val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                val installedCode = androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(packageInfo)
+                val update = AppUpdater.checkForUpdate(installedCode)
+                securePrefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply()
+                if (update != null) {
+                    availableUpdate = update
+                    updateMessage = null
+                } else if (showResultWhenCurrent) {
+                    availableUpdate = null
+                    updateMessage = "You're using the latest version."
+                } else {
+                    availableUpdate = null
+                }
+            } catch (e: Exception) {
+                if (showResultWhenCurrent) {
+                    updateMessage = e.message ?: "Could not check for updates. Please try again."
+                }
+            } finally {
+                checkingUpdates = false
+            }
+        }
+    }
 
     fun loadProjects() {
         scope.launch(Dispatchers.IO) {
@@ -230,16 +374,24 @@ private fun ProjectManagerApp() {
     LaunchedEffect(signedIn) {
         if (signedIn) loadProjects()
     }
+    LaunchedEffect(autoUpdateEnabled) {
+        val lastCheck = securePrefs.getLong("last_update_check", 0L)
+        val dayMillis = 24L * 60L * 60L * 1000L
+        if (autoUpdateEnabled && System.currentTimeMillis() - lastCheck >= dayMillis) {
+            checkForUpdates(showResultWhenCurrent = false)
+        }
+    }
 
     MaterialTheme {
         Surface(Modifier.fillMaxSize()) {
             if (!introSeen) {
-                IntroFlowScreen(onFinish = {
+                IntroFlowScreen(themeChoice = themeChoice, onFinish = {
                     introSeen = true
                     securePrefs.edit().putBoolean("intro_seen", true).apply()
                 })
             } else if (!signedIn) {
                 AuthScreen(
+                    themeChoice = themeChoice,
                     tab = authTab,
                     onTab = { authTab = it; error = null; success = null },
                     baseUrl = baseUrl, onBaseUrl = { baseUrl = it },
@@ -358,6 +510,19 @@ private fun ProjectManagerApp() {
                         loadProjects()
                         selected?.let { loadTasks(it) }
                     },
+                    onCheckUpdates = { checkForUpdates(showResultWhenCurrent = true) },
+                    checkingUpdates = checkingUpdates,
+                    onOpenUpdates = { availableUpdate = null; updateMessage = "Check for updates using the Updates button above." },
+                    autoUpdateEnabled = autoUpdateEnabled,
+                    onAutoUpdateEnabled = { enabled ->
+                        autoUpdateEnabled = enabled
+                        securePrefs.edit().putBoolean("auto_update_enabled", enabled).apply()
+                    },
+                    themeChoice = themeChoice,
+                    onThemeChoice = { choice ->
+                        themeChoice = choice
+                        securePrefs.edit().putString("theme_choice", choice).apply()
+                    },
                     busy = busy,                    error = error,
                     onCreateProject = { id, name, repo, description ->
                         busy = true
@@ -415,27 +580,80 @@ private fun ProjectManagerApp() {
                     onProjectDescription = { projectDescription = it }
                 )
             }
+            if (availableUpdate != null || updateMessage != null) {
+                val update = availableUpdate
+                AlertDialog(
+                    onDismissRequest = { availableUpdate = null; updateMessage = null },
+                    icon = { Text("⬆", color = Color(0xFF4B3CC4), style = MaterialTheme.typography.headlineMedium) },
+                    title = { Text(if (update != null) "RSS AI Project Manager update" else "App updates") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (update != null) {
+                                Text("Version ${update.versionName} is available.")
+                                if (update.releaseNotes.isNotBlank()) Text(update.releaseNotes)
+                            } else {
+                                Text(updateMessage.orEmpty())
+                            }
+                            if (updateMessage != null && update != null) {
+                                Text(updateMessage.orEmpty(), color = MaterialTheme.colorScheme.error)
+                            }
+                            if (checkingUpdates) CircularProgressIndicator()
+                        }
+                    },
+                    confirmButton = {
+                        if (update != null) {
+                            Button(
+                                enabled = !installingUpdate,
+                                onClick = {
+                                    installingUpdate = true
+                                    updateMessage = null
+                                    scope.launch(Dispatchers.IO) {
+                                        try {
+                                            AppUpdater.downloadAndInstall(context, update.apkUrl, update.sha256)
+                                            updateMessage = "Opening Android's installer…"
+                                        } catch (e: Exception) {
+                                            updateMessage = e.message ?: "Could not install the update."
+                                        } finally {
+                                            installingUpdate = false
+                                        }
+                                    }
+                                }
+                            ) { Text(if (installingUpdate) "Preparing update…" else "Download & install") }
+                        } else {
+                            TextButton(onClick = { updateMessage = null }) { Text("Close") }
+                        }
+                    },
+                    dismissButton = {
+                        if (update != null) {
+                            TextButton(onClick = { availableUpdate = null; updateMessage = null }) { Text("Later") }
+                        }
+                    }
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun AnimatedRoyalBackground(content: @Composable BoxScope.() -> Unit) {
+private fun AnimatedRoyalBackground(themeChoice: String = "Royal", content: @Composable BoxScope.() -> Unit) {
     val transition = rememberInfiniteTransition(label = "rssRoyal")
     val shift by transition.animateFloat(-900f, 1800f, infiniteRepeatable(tween(9000, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "shift")
-    val gradient = Brush.linearGradient(
-        listOf(Color(0xFF283593), Color(0xFF7E57C2), Color(0xFF00ACC1), Color(0xFF26A69A), Color(0xFFE0F7FA)),
-        Offset(0f, shift), Offset(1200f, shift + 1200f)
-    )
+    val palette = when (themeChoice) {
+        "Ocean" -> listOf(Color(0xFF003B73), Color(0xFF0077B6), Color(0xFF48CAE4), Color(0xFF90E0EF), Color(0xFFCAF0F8))
+        "Emerald" -> listOf(Color(0xFF064E3B), Color(0xFF059669), Color(0xFF34D399), Color(0xFFA7F3D0), Color(0xFFECFDF5))
+        "Violet" -> listOf(Color(0xFF4C1D95), Color(0xFF7C3AED), Color(0xFFA78BFA), Color(0xFFDDD6FE), Color(0xFFF5F3FF))
+        else -> listOf(Color(0xFF283593), Color(0xFF7E57C2), Color(0xFF00ACC1), Color(0xFF26A69A), Color(0xFFE0F7FA))
+    }
+    val gradient = Brush.linearGradient(palette, Offset(0f, shift), Offset(1200f, shift + 1200f))
     Box(Modifier.fillMaxSize().background(gradient), content = content)
 }
 
 @Composable
-private fun IntroFlowScreen(onFinish: () -> Unit) {
+private fun IntroFlowScreen(themeChoice: String, onFinish: () -> Unit) {
     var page by remember { mutableStateOf(0) }
     val titles = listOf("Manage Every RSS Project", "Turn Requirements Into Tasks", "Let AI Execute", "Track Progress Clearly")
     val bodies = listOf("One command center for your RSS project portfolio.", "Capture requirements, priorities and next actions in one place.", "Connect RSS Core and automation so approved work can move forward.", "Monitor projects, tasks and execution status from your dashboard.")
-    AnimatedRoyalBackground {
+    AnimatedRoyalBackground(themeChoice) {
         Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Image(painter = painterResource(R.drawable.rss_ai_project_manager_logo), contentDescription = "RSS AI Project Manager logo", modifier = Modifier.size(190.dp), contentScale = ContentScale.Fit)
             Spacer(Modifier.height(28.dp))
@@ -454,6 +672,7 @@ private fun IntroFlowScreen(onFinish: () -> Unit) {
 
 @Composable
 private fun AuthScreen(
+    themeChoice: String,
     tab: String, onTab: (String) -> Unit,
     baseUrl: String, onBaseUrl: (String) -> Unit,
     loginEmail: String, onLoginEmail: (String) -> Unit,
@@ -466,7 +685,7 @@ private fun AuthScreen(
     error: String?, success: String?, busy: Boolean, onLogin: () -> Unit, onRegister: () -> Unit
 ) {
     var policyAccepted by remember { mutableStateOf(false) }
-    AnimatedRoyalBackground {
+    AnimatedRoyalBackground(themeChoice) {
         Box(Modifier.fillMaxSize().imePadding().navigationBarsPadding()) {
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 20.dp),
@@ -517,6 +736,7 @@ private fun AuthScreen(
                 }
                 Spacer(Modifier.height(20.dp))
             }
+
         }
     }
 }
@@ -536,6 +756,13 @@ private fun Dashboard(
     onGoAhead: () -> Unit,
     onLogout: () -> Unit,
     onRefresh: () -> Unit,
+    onCheckUpdates: () -> Unit,
+    checkingUpdates: Boolean,
+    onOpenUpdates: () -> Unit,
+    autoUpdateEnabled: Boolean,
+    onAutoUpdateEnabled: (Boolean) -> Unit,
+    themeChoice: String,
+    onThemeChoice: (String) -> Unit,
     busy: Boolean,
     error: String?,
     onCreateProject: (String, String, String, String) -> Unit,
@@ -556,6 +783,12 @@ private fun Dashboard(
     onProjectDescription: (String) -> Unit
 ) {
     var page by remember { mutableStateOf("Dashboard") }
+    val themeAccent = when (themeChoice) {
+        "Ocean" -> Color(0xFF0077B6)
+        "Emerald" -> Color(0xFF059669)
+        "Violet" -> Color(0xFF7C3AED)
+        else -> Color(0xFF4B3CC4)
+    }
 
     if (editingProject != null) {
         AlertDialog(
@@ -596,7 +829,7 @@ private fun Dashboard(
     }
 
     Scaffold(
-        containerColor = Color(0xFFF7F8FF),
+        containerColor = when (themeChoice) { "Ocean" -> Color(0xFFF1FAFF); "Emerald" -> Color(0xFFF1FCF6); "Violet" -> Color(0xFFF8F5FF); else -> Color(0xFFF7F8FF) },
         topBar = {
             TopAppBar(
                 title = {
@@ -606,6 +839,7 @@ private fun Dashboard(
                     }
                 },
                 actions = {
+                    TextButton(onClick = onCheckUpdates, enabled = !checkingUpdates) { Text(if (checkingUpdates) "Checking…" else "Updates") }
                     IconButton(onClick = onRefresh, enabled = !busy) { Text("↻", fontSize = MaterialTheme.typography.titleLarge.fontSize) }
                     TextButton(onClick = onLogout, enabled = !busy) { Text("Logout") }
                 }
@@ -613,12 +847,12 @@ private fun Dashboard(
         }
     ) { padding ->
         Row(Modifier.fillMaxSize().padding(padding)) {
-            NavigationRail(containerColor = Color(0xFF20265C)) {
-                listOf("Dashboard", "Projects", "Tasks").forEach { item ->
+            NavigationRail(containerColor = themeAccent.copy(alpha = .96f)) {
+                listOf("Dashboard", "Projects", "Tasks", "Settings", "Premium").forEach { item ->
                     NavigationRailItem(
                         selected = page == item,
                         onClick = { page = item },
-                        icon = { Text(if (item == "Dashboard") "⌂" else if (item == "Projects") "▦" else "✓", color = if (page == item) Color(0xFF20265C) else Color.White) },
+                        icon = { Text(when (item) { "Dashboard" -> "⌂"; "Projects" -> "▦"; "Tasks" -> "✓"; "Settings" -> "⚙"; else -> "✦" }, color = if (page == item) Color(0xFF20265C) else Color.White) },
                         label = { Text(item, color = Color.White) },
                         colors = NavigationRailItemDefaults.colors(
                             selectedIconColor = Color(0xFF20265C),
@@ -694,6 +928,68 @@ private fun Dashboard(
                     } else {
                         items(projects) { project ->
                             ProjectRow(project, selected?.id == project.id, onSelect, onEditProject, busy)
+                        }
+                    }
+                } else if (page == "Settings") {
+                    item {
+                        Text("Settings & Security", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("Your preferences are stored on this device.", color = Color(0xFF68738D))
+                    }
+                    item {
+                        SectionCard("Automatic updates") {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Check for updates automatically", fontWeight = FontWeight.SemiBold)
+                                    Text("Checks once per day when the app opens. Android still asks before installing an APK.", color = Color(0xFF68738D))
+                                }
+                                Switch(checked = autoUpdateEnabled, onCheckedChange = onAutoUpdateEnabled)
+                            }
+                            OutlinedButton(onClick = onCheckUpdates, enabled = !checkingUpdates, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (checkingUpdates) "Checking for updates…" else "Check now")
+                            }
+                        }
+                    }
+                    item {
+                        SectionCard("Appearance") {
+                            Text("Choose your app accent style", color = Color(0xFF68738D))
+                            listOf("Royal", "Ocean", "Emerald", "Violet").forEach { choice ->
+                                Row(Modifier.fillMaxWidth().clickable { onThemeChoice(choice) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    RadioButton(selected = themeChoice == choice, onClick = { onThemeChoice(choice) })
+                                    Text(choice)
+                                }
+                            }
+                            Text("Preference saved. Full component-level theme customization can be enabled in a future theme-studio release.", color = Color(0xFF68738D), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    item {
+                        SectionCard("Security") {
+                            Text("Session tokens are stored with Android encrypted preferences.", color = Color(0xFF68738D))
+                            Text("API requests require HTTPS and block insecure endpoints.", color = Color(0xFF68738D))
+                            Text("Update APK integrity is checked against the release digest when GitHub provides one.", color = Color(0xFF68738D))
+                            OutlinedButton(onClick = onLogout, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Sign out and clear session") }
+                        }
+                    }
+                    item {
+                        SectionCard("App information") {
+                            Text("Package: ${androidx.compose.ui.platform.LocalContext.current.packageName}", color = Color(0xFF68738D))
+                            Text("Installed version: ${androidx.compose.ui.platform.LocalContext.current.packageManager.getPackageInfo(androidx.compose.ui.platform.LocalContext.current.packageName, 0).versionName}", color = Color(0xFF68738D))
+                        }
+                    }
+                } else if (page == "Premium") {
+                    item {
+                        Text("RSS Premium", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("Premium access is controlled by the RSS account and licensing service.", color = Color(0xFF68738D))
+                    }
+                    item {
+                        SectionCard("Premium capabilities") {
+                            listOf("Advanced AI automation and task orchestration", "Portfolio-wide analytics and reports", "Extended project and workspace controls", "Priority automation and integrations", "Advanced security and audit controls").forEach { feature ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("✦", color = Color(0xFF6A50E9))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(feature)
+                                }
+                            }
+                            Text("Plan and payment controls appear when the RSS licensing endpoint is configured. This screen does not claim a paid plan is active.", color = Color(0xFF68738D), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 } else {
