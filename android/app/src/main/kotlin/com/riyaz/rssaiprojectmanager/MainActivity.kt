@@ -302,8 +302,10 @@ private fun ProjectManagerApp() {
         checkingUpdates = true
         scope.launch(Dispatchers.IO) {
             try {
-                val installedCode = context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode
+                val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                val installedCode = androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(packageInfo)
                 val update = AppUpdater.checkForUpdate(installedCode)
+                securePrefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply()
                 if (update != null) {
                     availableUpdate = update
                     updateMessage = null
@@ -376,7 +378,6 @@ private fun ProjectManagerApp() {
         val lastCheck = securePrefs.getLong("last_update_check", 0L)
         val dayMillis = 24L * 60L * 60L * 1000L
         if (autoUpdateEnabled && System.currentTimeMillis() - lastCheck >= dayMillis) {
-            securePrefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply()
             checkForUpdates(showResultWhenCurrent = false)
         }
     }
