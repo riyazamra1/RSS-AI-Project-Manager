@@ -13,7 +13,12 @@ from ..core.config import settings
 from ..db import get_connection
 from ..security import create_session, hash_password, require_auth, require_platform_admin, revoke_session, user_workspaces, verify_password
 
-router = APIRouter(prefix="/auth", tags=["auth"])\n\n\ndef _ensure_blocked_users_table(conn) -> None:\n    conn.execute("CREATE TABLE IF NOT EXISTS blocked_users (email TEXT PRIMARY KEY,user_id UUID,full_name TEXT,reason TEXT,previous_approval_status TEXT,blocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),blocked_by TEXT NOT NULL DEFAULT 'rss-core-admin')")\n
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _ensure_blocked_users_table(conn) -> None:
+    conn.execute("CREATE TABLE IF NOT EXISTS blocked_users (email TEXT PRIMARY KEY,user_id UUID,full_name TEXT,reason TEXT,previous_approval_status TEXT,blocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),blocked_by TEXT NOT NULL DEFAULT 'rss-core-admin')")
+
 
 
 class RegisterRequest(BaseModel):
@@ -43,6 +48,54 @@ async def _send_template(to: str, template_id: str, variables: dict[str, str]) -
         )
     if response.status_code >= 300:
         raise RuntimeError(f"Resend template send failed: {response.status_code}")
+
+async def _send_verification_email(to: str, user_name: str, verify_url: str) -> None:
+    """Send a mobile-friendly verification card; email clients may block clipboard JavaScript."""
+    import html
+
+    safe_name = html.escape(user_name, quote=True)
+    safe_url = html.escape(verify_url, quote=True)
+    body = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:24px 12px;background:#f3f5fb;font-family:Arial,Helvetica,sans-serif;color:#172033">
+  <main style="max-width:540px;margin:0 auto;background:#fff;border:1px solid #e4e8f0;border-radius:20px;overflow:hidden">
+    <header style="padding:24px;text-align:center;background:#172554;color:#fff">
+      <div style="font-size:12px;font-weight:800;letter-spacing:2px">RSS AI PROJECT MANAGER</div>
+      <div style="font-size:12px;color:#c7d2fe;margin-top:7px">Razeen Secure Solution</div>
+    </header>
+    <section style="padding:28px 22px;text-align:center">
+      <div style="display:inline-block;background:#ecfdf3;color:#027a48;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:700">EMAIL VERIFICATION</div>
+      <h1 style="font-size:24px;line-height:1.3;margin:18px 0 10px">Confirm your email</h1>
+      <p style="font-size:15px;line-height:1.7;color:#667085">Hello {safe_name}, verify your email address to continue creating your RSS AI Project Manager account.</p>
+      <div style="margin:24px 0;padding:20px 14px;border:1px solid #dbe3f0;border-radius:14px;background:#f8faff">
+        <p style="margin:0 0 14px;font-size:13px;color:#475467">Tap the secure button below. If it does not open, use the full verification link provided by your email client.</p>
+        <a href="{safe_url}" style="display:inline-block;padding:14px 24px;border-radius:10px;background:#4338ca;color:#fff;text-decoration:none;font-size:15px;font-weight:700">Verify email address</a>
+      </div>
+      <p style="font-size:12px;line-height:1.6;color:#667085;word-break:break-word">If the button does not work, copy this link into your browser:<br><a href="{safe_url}" style="color:#4338ca">{safe_url}</a></p>
+      <p style="font-size:12px;line-height:1.6;color:#667085">After verification, your registration will be sent for RSS Core administrator approval. This message contains a verification link, not an OTP.</p>
+    </section>
+    <footer style="padding:16px;text-align:center;background:#f8fafc;color:#98a2b3;font-size:11px">If you did not request this account, you can ignore this email.</footer>
+  </main>
+</body></html>"""
+    payload = {
+        "from": settings.resend_from_email,
+        "to": [to],
+        "subject": "Verify your email · RSS AI Project Manager",
+        "html": body,
+        "text": (
+            f"Hello {user_name}, verify your RSS AI Project Manager email using this link: "
+            f"{verify_url}\n\nAfter verification, your registration will be sent for RSS Core administrator approval."
+        ),
+    }
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {settings.resend_api_key}", "Content-Type": "application/json"},
+            json=payload,
+        )
+    if response.status_code >= 300:
+        raise RuntimeError(f"Resend verification email send failed: {response.status_code}")
+
 
 def _app_url(path: str = "") -> str:
     # Production verification links must never be generated with an empty origin.
@@ -237,7 +290,7 @@ async def register(item: RegisterRequest):
         conn.commit()
     verify_url = _app_url("/auth/verify-email?token=" + quote(verification_token))
     try:
-        await _send_template(item.email, settings.resend_verify_template_id, {"USER_NAME": item.full_name.strip(), "VERIFY_URL": verify_url})
+        await _send_verification_email(item.email, item.full_name.strip(), verify_url)
     except Exception as exc:
         with get_connection() as conn:
             conn.execute("DELETE FROM users WHERE id=%s", (user["id"],))

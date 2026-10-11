@@ -9,7 +9,12 @@ from fastapi import APIRouter, HTTPException, Request
 from ..core.config import settings
 from ..db import get_connection
 
-router = APIRouter(tags=["internal"])\n\n\ndef _ensure_blocked_users_table(conn) -> None:\n    conn.execute("""CREATE TABLE IF NOT EXISTS blocked_users (email TEXT PRIMARY KEY,user_id UUID,full_name TEXT,reason TEXT,previous_approval_status TEXT,blocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),blocked_by TEXT NOT NULL DEFAULT 'rss-core-admin')""")\n
+router = APIRouter(tags=["internal"])
+
+
+def _ensure_blocked_users_table(conn) -> None:
+    conn.execute("""CREATE TABLE IF NOT EXISTS blocked_users (email TEXT PRIMARY KEY,user_id UUID,full_name TEXT,reason TEXT,previous_approval_status TEXT,blocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),blocked_by TEXT NOT NULL DEFAULT 'rss-core-admin')""")
+
 
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
@@ -176,7 +181,8 @@ def unblock_internal_user(user_id: str, request: Request):
     return {"ok": True, "user_id": user_id, "email": row["email"], "status": restored}
 
 
-@router.get("/health")
+@router.get("/api/v1/internal/health")
+@router.get("/internal/health")
 def internal_health(request: Request):
     _require_core(request)
     return {"ok": True, "service": "rss-ai-project-manager"}
