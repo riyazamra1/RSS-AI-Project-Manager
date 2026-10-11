@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rss-ai-project-manager-portal",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-09",
+  "assets": {
+    "directory": "../web",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "routes": [
+    { "pattern": "pm.rssapps.cv/", "zone_name": "rssapps.cv" },
+    { "pattern": "pm.rssapps.cv/index.html", "zone_name": "rssapps.cv" },
+    { "pattern": "pm.rssapps.cv/app.js", "zone_name": "rssapps.cv" },
+    { "pattern": "pm.rssapps.cv/assets/*", "zone_name": "rssapps.cv" },
+    { "pattern": "pm.rssapps.cv/config/*", "zone_name": "rssapps.cv" }
+  ]
+}

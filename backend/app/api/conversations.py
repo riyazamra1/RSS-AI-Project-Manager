@@ -37,6 +37,20 @@ def create_conversation(item: ConversationCreate, ctx: dict = Depends(current_wo
         conn.commit()
     return dict(row)
 
+@router.get("")
+def list_conversations(ctx: dict = Depends(current_workspace)) -> list[dict]:
+    """List conversations for the current workspace without exposing other tenants."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT c.id,c.project_id,c.title,c.created_at,c.updated_at,
+                      (SELECT COUNT(*)::int FROM messages m WHERE m.conversation_id=c.id) AS message_count
+               FROM conversations c WHERE c.workspace_id=%s
+               ORDER BY c.updated_at DESC,c.id DESC LIMIT 100""",
+            (ctx["workspace_id"],),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 @router.get("/{conversation_id}")
 def get_conversation(conversation_id: int, ctx: dict = Depends(current_workspace)) -> dict:
     with get_connection() as conn:

@@ -10,6 +10,12 @@ RSS AI Project Manager now has two full clients sharing the same backend/API:
 
 Both clients use the same authenticated workspace state. Android can sign in, load projects, inspect tasks, create tasks, refresh project state, and request the next approved task through the authenticated backend execution endpoint. Privileged credentials remain server-side.
 
+## PM portal feature map
+
+The web client includes workspace overview and activity, project create/edit, task create/filter/status updates, persisted AI conversations, project memory for requirements and decisions, milestones, workspace labels, due-date calendar, automatic project check-in schedules, service status, and a command center for All Status, Continue, requirements, next, Go Ahead, and fix errors. Workspace-scoped requests include the X-Workspace-ID header. OAuth callbacks return the web session through a URL fragment that the browser consumes and removes.
+
+The Cloudflare Workers static-portal deployment scaffold is in cloudflare-worker/. It is scoped to the portal HTML/JS/assets; FastAPI endpoints, PostgreSQL, email verification, RSS Core approval callbacks, and RAY execution remain on the existing backend. The Worker has not been deployed or live-verified merely by committing its configuration.
+
 ## Unified system
 
 **RSS AI Project Manager is the single source of truth for project management and autonomous development.**
@@ -64,6 +70,10 @@ Storage |          v             v
 **Execution rule:** PM creates and tracks work; RSS Core/RAY executes it. PM must not execute AI work directly as a fallback. If RAY is unavailable or disabled, the task is blocked/retried and remains visible in PM state.
 
 GitHub is the source of truth for project repositories, but GitHub Actions is **not required for runtime scheduling or execution**. Cloudflare/RSS Core/RAY is the intended runtime path because GitHub Actions limits must not block autonomous operation.
+
+## RSS KIT authentication UI
+
+The Android authentication surface uses the RSS KIT remote-auth contract. The native authentication engine remains local and secure, while public UI configuration is loaded from `/auth/ui-config` and cached on-device. Login/registration copy, logo URL, and supported visual tokens can therefore be updated server-side without reinstalling the APK. Native authentication logic or Android dependency changes still require an APK update.
 
 ## RSS requirements
 

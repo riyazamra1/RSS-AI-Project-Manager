@@ -15,6 +15,8 @@ class TaskCreate(BaseModel):
     arguments: dict = Field(default_factory=dict)
     command: list[str] | None = None
     context: str | None = Field(default=None, max_length=12000)
+    priority: int = Field(default=2, ge=1, le=5)
+    due_date: str | None = None
 
 def _validate_command(command: list[str] | None):
     if command is None:
@@ -36,10 +38,10 @@ def create_task(item: TaskCreate, ctx: dict = Depends(current_workspace)) -> dic
             conversation = conn.execute("SELECT id FROM conversations WHERE id=%s AND workspace_id=%s",(item.conversation_id,ctx["workspace_id"])).fetchone()
             if conversation is None: raise HTTPException(404,"Conversation not found")
         row = conn.execute(
-            """INSERT INTO tasks(project_id,conversation_id,workspace_id,title,provider,operation,arguments,command,context)
-               VALUES(%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s)
-               RETURNING id,project_id,conversation_id,title,status,provider,operation,arguments,command,context,created_at,updated_at""",
-            (item.project_id,item.conversation_id,ctx["workspace_id"],item.title,item.provider,item.operation,__import__("json").dumps(item.arguments),__import__("json").dumps(command) if command is not None else None,item.context),
+            """INSERT INTO tasks(project_id,conversation_id,workspace_id,title,provider,operation,arguments,command,context,priority,due_date)
+               VALUES(%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s)
+               RETURNING id,project_id,conversation_id,title,status,provider,operation,arguments,command,context,priority,due_date,created_at,updated_at""",
+            (item.project_id,item.conversation_id,ctx["workspace_id"],item.title,item.provider,item.operation,__import__("json").dumps(item.arguments),__import__("json").dumps(command) if command is not None else None,item.context,item.priority,item.due_date),
         ).fetchone()
         conn.commit()
     audit(ctx["user"],ctx["workspace_id"],"task.create","task",str(row["id"]))
