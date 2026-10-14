@@ -160,7 +160,7 @@ def block_internal_user(user_id: str, request: Request):
         if not user:
             raise HTTPException(404, "Project Manager user not found")
         conn.execute("INSERT INTO blocked_users(email,user_id,full_name,reason,previous_approval_status,blocked_by) VALUES(%s,%s,%s,%s,%s,%s) ON CONFLICT(email) DO UPDATE SET user_id=EXCLUDED.user_id,full_name=EXCLUDED.full_name,reason=EXCLUDED.reason,previous_approval_status=EXCLUDED.previous_approval_status,blocked_at=NOW(),blocked_by=EXCLUDED.blocked_by", (user["email"], user["id"], user["full_name"], None, user["approval_status"], "rss-core-admin"))
-        conn.execute("UPDATE users SET approval_status='blocked',updated_at=NOW() WHERE id=%s", (user_id,))
+        conn.execute("UPDATE users SET approval_status='suspended',updated_at=NOW() WHERE id=%s", (user_id,))
         conn.execute("UPDATE sessions SET revoked_at=NOW() WHERE user_id=%s AND revoked_at IS NULL", (user_id,))
         conn.commit()
     return {"ok": True, "user_id": user_id, "email": user["email"], "status": "blocked"}
